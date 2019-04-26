@@ -1,7 +1,4 @@
-from torch import nn
-from model_build_utils.abstract_bonsai_classes import BonsaiModule
-from model_build_utils.bonsai_modules import BonsaiConv2d
-from model_build_utils.bonsai_modules import BonsaiConcat
+from model_build_utils.bonsai_modules import *
 
 
 class BonsaiFactory:
@@ -27,6 +24,9 @@ class BonsaiFactory:
 
 BonsaiFactory.register_new_creator('conv2d', BonsaiConv2d)
 BonsaiFactory.register_new_creator('concat', BonsaiConcat)
+BonsaiFactory.register_new_creator('deconv2d', BonsaiDeconv2d)
+BonsaiFactory.register_new_creator('maxpool', BonsaiMaxpool)
+BonsaiFactory.register_new_creator('pixel_shuffle', BonsaiPixelShuffle)
 
 
 class NonLinearFactory:

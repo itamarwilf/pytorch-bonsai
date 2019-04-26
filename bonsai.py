@@ -11,6 +11,7 @@ class Bonsai(torch.nn.Module):
     def __init__(self, cfg_path):
         super(Bonsai, self).__init__()
         self.device = None
+        self.output_channels = List[int]
         self.layer_outputs = Dict[int]
         self.model_output = []
 
@@ -48,7 +49,7 @@ class Bonsai(torch.nn.Module):
 def create_bonsai_modules(bonsai_model: nn.Module) -> nn.ModuleList:
     module_list = nn.ModuleList()
     # number of input channels for next layer is taken from prev layer output channels (or model input)
-    bonsai_model.channels = [int(bonsai_model.hyperparams['in_channels'])]
+    bonsai_model.output_channels.append(int(bonsai_model.hyperparams['in_channels']))
     # TODO remove counter for names once better naming is implemented
     counter = 1
     # iterate over module definitions to create and add modules to bonsai model

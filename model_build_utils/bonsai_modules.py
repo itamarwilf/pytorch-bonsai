@@ -1,6 +1,10 @@
+from typing import Dict
+
 import torch
 from torch import nn
 from inspect import getfullargspec
+
+from bonsai import Bonsai
 from model_build_utils.abstract_bonsai_classes import BonsaiModule, Prunable
 from model_build_utils.factories import NonLinearFactory
 
@@ -32,10 +36,10 @@ class BonsaiConv2d(BonsaiModule, Prunable):
             self.f = call_constructor_with_cfg(activation_creator, module_cfg)
 
         # take input channels from prev layer
-        module_cfg['in_channels'] = bonsai_model.channels[-1]
+        module_cfg['in_channels'] = bonsai_model.output_channels[-1]
         self.conv2d = call_constructor_with_cfg(nn.Conv2d, module_cfg)
         # pass output channels to next module using bonsai model
-        bonsai_model.channels.append(module_cfg['out_channels'])
+        self.bonsai_model.output_channels.append(module_cfg['out_channels'])
 
     def forward(self, *layer_input):
         x = self.conv2d(layer_input)
@@ -58,13 +62,13 @@ class BonsaiConv2d(BonsaiModule, Prunable):
 
 class BonsaiConcat(BonsaiModule):
 
-    def __init__(self, bonsai_model, module_cfg):
+    def __init__(self, bonsai_model: Bonsai, module_cfg: Dict[str]):
         super(BonsaiConcat).__init__(bonsai_model, module_cfg)
         self.layers = [int(x) for x in module_cfg["layers"].split(",")]
         # sum all the channels of concatenated tensors
-        out_channels = sum([bonsai_model.output_filters[layer_i] for layer_i in self.layers])
+        out_channels = sum([bonsai_model.output_channels[layer_i] for layer_i in self.layers])
         # pass output channels to next module using bonsai model
-        bonsai_model.channels.append(out_channels)
+        self.bonsai_model.output_channels.append(out_channels)
 
     def forward(self, *layer_input):
         return torch.cat(tuple(self.bonsai_model.layer_outputs.get(i) for i in self.layers), dim=1)
@@ -85,13 +89,13 @@ class BonsaiDeconv2d(BonsaiModule, Prunable):
             self.f = call_constructor_with_cfg(activation_creator, module_cfg)
 
         # takes number of input channels from prev layer
-        module_cfg['in_channels'] = bonsai_model.channels[-1]
-        self.conv2d = call_constructor_with_cfg(nn.ConvTranspose2d, module_cfg)
+        module_cfg['in_channels'] = bonsai_model.output_channels[-1]
+        self.deconv2d = call_constructor_with_cfg(nn.ConvTranspose2d, module_cfg)
         # pass output channels to next module using bonsai model
-        bonsai_model.channels.append(module_cfg['out_channels'])
+        self.bonsai_model.output_channels.append(module_cfg['out_channels'])
 
     def forward(self, *layer_input):
-        x = self.conv2d(layer_input)
+        x = self.deconv2d(layer_input)
 
         if self.bonsai_model.prune:
             x.register_hook(self.bonsai_model.pruning_func)
@@ -107,3 +111,28 @@ class BonsaiDeconv2d(BonsaiModule, Prunable):
 
     def prune_output(self):
         pass
+
+
+class BonsaiPixelShuffle(BonsaiModule):
+
+    def __init__(self, bonsai_model: Bonsai, module_cfg: Dict[str]):
+        super().__init__(bonsai_model, module_cfg)
+        self.pixel_shuffle = call_constructor_with_cfg(nn.PixelShuffle, module_cfg)
+        # calc number of output channels using input channels and scaling factor
+        out_channels = bonsai_model.output_channels[-1] / (self.module_cfg["upscale_factor"] ** 2)
+        self.bonsai_model.output_channels.append(out_channels)
+
+    def forward(self, *layer_input):
+        return self.pixel_shuffle(layer_input)
+
+
+class BonsaiMaxpool(BonsaiModule):
+
+    def __init__(self, bonsai_model: Bonsai, module_cfg: Dict[str]):
+        super().__init__(bonsai_model, module_cfg)
+        self.maxpool = call_constructor_with_cfg(nn.MaxPool2d, module_cfg)
+        # since max pooling doesn't change the tensor's number of channels, re append previous output channels
+        self.bonsai_model.output_channels.append(self.bonsai_model.output_channels[-1])
+
+    def forward(self, *layer_input):
+        return self.maxpool(layer_input)
