@@ -1,4 +1,7 @@
+from typing import List
 
+
+# TODO implement all type checks, if wrong raise meaningful message, if not implemented for certain key raise warning
 def input_type_checks(key, value):
     """
     performs type and sanity checks while parsing model_cfg
@@ -8,7 +11,7 @@ def input_type_checks(key, value):
     """
 
 
-def parse_model_cfg(path):
+def parse_model_cfg(path: str) -> List[dict]:
     """
     Parses the model configuration file and returns module definitions
     :param path: path to model cfg file
@@ -50,4 +53,3 @@ def write_pruned_model_cfg(mod_defs, pruning_targets, file_path: str):
                     f.write(k + '=' + str(v))
                 f.write('\n')
             f.write('\n')
-

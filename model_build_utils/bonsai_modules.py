@@ -1,6 +1,8 @@
+import torch
 from torch import nn
 from inspect import getfullargspec
-
+from bonsai import Bonsai
+from typing import Dict
 from model_build_utils.factories import BonsaiFactory, NonLinearFactory
 
 
@@ -18,12 +20,12 @@ def call_constructor_with_cfg(constructor, cfg: dict):
 
 class BonsaiModule(nn.Module):
 
-    def __init__(self, bonsai_model, module_cfg):
+    def __init__(self, bonsai_model: Bonsai, module_cfg: Dict[str]):
         super(BonsaiModule, self).__init__()
         self.bonsai_model = bonsai_model
-        self.module_cfg
+        self.module_cfg = module_cfg
 
-    def forward(self, *input):
+    def forward(self, *layer_input):
         raise NotImplementedError
 
 
@@ -105,18 +107,18 @@ class BonsaiConv2d(BonsaiModule, Prunable):
 class BonsaiConcat(BonsaiModule):
 
     def __init__(self, bonsai_model, module_cfg):
-        layers = [int(x) for x in module_cfg['layers'].split(',')]
+        super().__init__(bonsai_model, module_cfg)
+        self.layers = [int(x) for x in module_cfg["layers"].split(",")]
         # sum all the channels of concatenated tensors
-        out_channels = sum([bonsai_model.output_filters[layer_i] for layer_i in layers])
+        out_channels = sum([bonsai_model.output_filters[layer_i] for layer_i in self.layers])
         # pass output channels to next module using bonsai model
         bonsai_model.channels.append(out_channels)
 
-    # TODO - implement BonsaiConcat forward pass
-    def forward(self, *input):
-        pass
+    def forward(self, *layer_input):
+        return torch.cat(tuple(self.bonsai_model.layer_outputs.get(i) for i in self.layers), dim=1)
 
 
-def create_bonsai_modules(bonsai_model):
+def create_bonsai_modules(bonsai_model: nn.Module) -> nn.ModuleList:
     module_list = nn.ModuleList()
     # number of input channels for next layer is taken from prev layer output channels (or model input)
     bonsai_model.channels = [int(bonsai_model.hyperparams['in_channels'])]
@@ -133,4 +135,5 @@ def create_bonsai_modules(bonsai_model):
         # implemented
         module_name = module_type.join(str(counter))
         counter += 1
-        module_list.add_module(module)
+        module_list.add_module(module_name, module)
+    return module_list
