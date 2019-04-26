@@ -1,6 +1,8 @@
 import torch
+from torch import nn
+
+from model_build_utils.factories import BonsaiFactory
 from model_build_utils.model_parser import parse_model_cfg
-from model_build_utils.bonsai_modules import create_bonsai_modules
 from typing import List, Dict
 
 
@@ -41,3 +43,24 @@ class Bonsai(torch.nn.Module):
                 self.model_output.append(x)
 
         return self.model_output
+
+
+def create_bonsai_modules(bonsai_model: nn.Module) -> nn.ModuleList:
+    module_list = nn.ModuleList()
+    # number of input channels for next layer is taken from prev layer output channels (or model input)
+    bonsai_model.channels = [int(bonsai_model.hyperparams['in_channels'])]
+    # TODO remove counter for names once better naming is implemented
+    counter = 1
+    # iterate over module definitions to create and add modules to bonsai model
+    for module_def in bonsai_model.module_defs:
+        module_type = module_def['type']
+        # get the module creator based on type
+        module_creator = BonsaiFactory.get_creator(module_type)
+        # create the module using the creator and module cfg
+        module = module_creator(bonsai_model, module_def)
+        # TODO - find better naming mechanism, maybe take names from original parsed model after jit traced parsing is
+        # implemented
+        module_name = module_type.join(str(counter))
+        counter += 1
+        module_list.add_module(module_name, module)
+    return module_list

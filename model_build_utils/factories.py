@@ -1,5 +1,5 @@
 from torch import nn
-from model_build_utils.bonsai_modules import BonsaiModule
+from model_build_utils.abstract_bonsai_classes import BonsaiModule
 from model_build_utils.bonsai_modules import BonsaiConv2d
 from model_build_utils.bonsai_modules import BonsaiConcat
 
