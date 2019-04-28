@@ -64,3 +64,57 @@ class Bonsai(torch.nn.Module):
             module = module_creator(self, module_cfg)
             module_list.add_module(module_name, module)
         return module_list
+
+    # TODO - needs rewriting
+    def total_num_filters(self):
+        filters = 0
+        for mod_def in self.module_cfgs:
+            if mod_def["type"] == "convolutional" and "avoid_pruning" not in mod_def.keys():
+                filters += int(mod_def["filters"])
+        return filters
+
+    def prune(self, device, train_dataloader, eval_dataloader, optimizer, criterion, pruning_percentage=0.1,
+              pruning_iterations=9):
+
+        # TODO - remove writer? replace with pickling or graph for pruning?
+        # writer = SummaryWriter()
+        # init prunner and engines
+
+        # train_dataloader, eval_dataloader = get_dataloaders()
+
+        # _, device = set_cuda()
+
+        # model = NNFactory(prune_cfg["model"])
+        # original_state_dict = torch.load('final.pt')
+        # new_state_dict = model.state_dict()
+        # for k, v in zip(new_state_dict.keys(), original_state_dict.values()):
+        #     new_state_dict[k] = v
+        # model.load_state_dict(new_state_dict)
+        self.to(device)
+
+        num_filters_to_prune = pruning_percentage * total_num_filters(model)
+
+        for iter in range(pruning_iterations):
+            # run ranking engine on val dataset
+            model.prune = True
+            ranker_engine = create_supervised_ranker(model, criterion)
+            ranker_engine.run(eval_dataloader, max_epochs=1)
+
+            # prune model and init optimizer, etc
+            model.normalize_ranks_per_layer()
+            # TODO check for duplicates
+            pruning_targets = model.get_prunning_plan(num_filters_to_prune)
+
+            # run training engine on train dataset (and log recovery using val dataset and engine)
+
+            optimizer = get_optimizer(model)
+            trainer = create_supervised_trainer(model, optimizer, criterion)
+            attach_trainer_events(trainer, model, scheduler=None)
+
+            metrics = {"L1": MeanAbsoluteError(), "L2": MeanSquaredError()}
+
+            val_evaluator = create_supervised_evaluator(model, metrics=metrics)
+            attach_eval_events(trainer, val_evaluator, eval_dataloader, writer, "Val")
+
+            trainer.run(train_dataloader, prune_cfg['recovery_epochs'])
+
