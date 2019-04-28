@@ -1,9 +1,10 @@
 import torch
 from torch import nn
 
-from model_build_utils.factories import BonsaiFactory
-from model_build_utils.model_parser import parse_model_cfg
+from modules.factories.bonsai_module_factory import BonsaiFactory
+from modules.model_cfg_parser import parse_model_cfg
 from typing import List, Dict
+from collections import Counter
 
 
 class Bonsai(torch.nn.Module):
@@ -11,8 +12,8 @@ class Bonsai(torch.nn.Module):
     def __init__(self, cfg_path):
         super(Bonsai, self).__init__()
         self.device = None
-        self.output_channels = List[int]
-        self.layer_outputs = Dict[int]
+        self.output_channels: List[int] = []
+        self.layer_outputs: List[torch.Tensor] = []
         self.model_output = []
 
         self.last_pruned = None
@@ -20,12 +21,11 @@ class Bonsai(torch.nn.Module):
 
         self.module_cfgs = parse_model_cfg(cfg_path)  # type: List[dict]
         self.hyperparams = self.module_cfgs.pop(0)  # type: dict
-        self.module_list = create_bonsai_modules(self)
+        self.module_list = self._create_bonsai_modules()
 
     def forward(self, x):
 
-        for i, (module_cfg, module) in enumerate(zip(self.module_cfgs, self.module_list)):
-
+        for i, module in enumerate(self.module_list):
             x = module(x)
             # mtype = module_cfg['type']
             # if mtype in ['convolutional', 'upsample', 'maxpool']:
@@ -39,29 +39,28 @@ class Bonsai(torch.nn.Module):
             # elif mtype == 'shortcut':
             #     layer_i = int(module_cfg['from'])
             #     x = layer_outputs[-1] + layer_outputs[layer_i]
-            # layer_outputs.append(x)
-            if module_cfg.get("output") is True:
+            self.layer_outputs.append(x)
+            if module.module_cfg.get("output"):
                 self.model_output.append(x)
 
         return self.model_output
 
+    def _create_bonsai_modules(self) -> nn.ModuleList:
+        module_list = nn.ModuleList()
+        # number of input channels for next layer is taken from prev layer output channels (or model input)
+        self.output_channels.append(int(self.hyperparams['in_channels']))
+        counter = Counter()
+        # iterate over module definitions to create and add modules to bonsai model
+        for module_cfg in self.module_cfgs:
+            # TODO - maybe take names from original parsed model after jit traced parsing is implemented
+            module_type = module_cfg['type']
+            counter[module_type] += 1
+            module_name = module_type + "_" + str(counter[module_type])
+            module_cfg["name"] = module_name
 
-def create_bonsai_modules(bonsai_model: nn.Module) -> nn.ModuleList:
-    module_list = nn.ModuleList()
-    # number of input channels for next layer is taken from prev layer output channels (or model input)
-    bonsai_model.output_channels.append(int(bonsai_model.hyperparams['in_channels']))
-    # TODO remove counter for names once better naming is implemented
-    counter = 1
-    # iterate over module definitions to create and add modules to bonsai model
-    for module_def in bonsai_model.module_defs:
-        module_type = module_def['type']
-        # get the module creator based on type
-        module_creator = BonsaiFactory.get_creator(module_type)
-        # create the module using the creator and module cfg
-        module = module_creator(bonsai_model, module_def)
-        # TODO - find better naming mechanism, maybe take names from original parsed model after jit traced parsing is
-        # implemented
-        module_name = module_type.join(str(counter))
-        counter += 1
-        module_list.add_module(module_name, module)
-    return module_list
+            # get the module creator based on type
+            module_creator = BonsaiFactory.get_creator(module_type)
+            # create the module using the creator and module cfg
+            module = module_creator(self, module_cfg)
+            module_list.add_module(module_name, module)
+        return module_list

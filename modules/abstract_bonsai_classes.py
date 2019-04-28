@@ -1,19 +1,20 @@
-from typing import Dict
+from typing import Dict, Any
 
 from torch import nn
-
-from bonsai import Bonsai
 
 
 class BonsaiModule(nn.Module):
 
-    def __init__(self, bonsai_model: Bonsai, module_cfg: Dict[str]):
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super(BonsaiModule, self).__init__()
         self.bonsai_model = bonsai_model
-        self.mtype = module_cfg.pop("type")
-        self.module_cfg = module_cfg
+        self.module_cfg = self._parse_module_cfg(module_cfg)
 
-    def forward(self, *layer_input):
+    @staticmethod
+    def _parse_module_cfg(module_cfg: dict) -> dict:
+        raise NotImplementedError
+
+    def forward(self, layer_input):
         raise NotImplementedError
 
 

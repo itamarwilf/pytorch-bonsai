@@ -1,16 +1,6 @@
 from typing import List
 
 
-# TODO implement all type checks, if wrong raise meaningful message, if not implemented for certain key raise warning
-def input_type_checks(key, value):
-    """
-    performs type and sanity checks while parsing model_cfg
-    :param key: module cfg key
-    :param value: module cfg value to be evaluated
-    :return: value as correct type if valid, raise value error if not
-    """
-
-
 def parse_model_cfg(path: str) -> List[dict]:
     """
     Parses the model configuration file and returns module definitions
