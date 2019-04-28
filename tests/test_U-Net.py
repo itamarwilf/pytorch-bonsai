@@ -1,6 +1,7 @@
 from bonsai import Bonsai
 import torch
 
+
 def test_build_unet():
     cfg_path = "/home/itamar/Documents/pytorch-bonsai/example_configs/U-NET.cfg"
     _ = Bonsai(cfg_path)
