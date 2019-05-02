@@ -7,7 +7,7 @@ class BonsaiModule(nn.Module):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super(BonsaiModule, self).__init__()
-        self.bonsai_model = bonsai_model
+        # self.bonsai_model = bonsai_model
         self.module_cfg = self._parse_module_cfg(module_cfg)
 
     @staticmethod
@@ -23,6 +23,7 @@ class Prunable:
     interface of prunable Bonsai modules
     """
     def __init__(self):
+        self.prune = False
         self.activation = None
 
     def prune_output(self):

@@ -1,10 +1,17 @@
 import torch
 from torch import nn
-
+from modules.abstract_bonsai_classes import Prunable, BonsaiModule
 from modules.factories.bonsai_module_factory import BonsaiFactory
 from modules.model_cfg_parser import parse_model_cfg
 from typing import List, Dict
 from collections import Counter
+
+
+class Prunner:
+
+    def __init__(self):
+        super().__init__()
+        self.prune = False
 
 
 class Bonsai(torch.nn.Module):
@@ -40,10 +47,21 @@ class Bonsai(torch.nn.Module):
             #     layer_i = int(module_cfg['from'])
             #     x = layer_outputs[-1] + layer_outputs[layer_i]
             self.layer_outputs.append(x)
-            if module.module_cfg.get("output"):
+            if module[0].module_cfg.get("output"):
                 self.model_output.append(x)
 
         return self.model_output
+
+    def total_num_filters(self):
+        filters = 0
+        for module in self.module_list:
+            print(type(module))
+            # if module["type"] == "convolutional" and "avoid_pruning" not in module.keys():
+            if isinstance(module, (Prunable, BonsaiModule)):
+                print("AAA")
+                print(module.module_cfg["out_channels"])
+                filters += module.module_cfg["out_channels"]
+        return filters
 
     def _create_bonsai_modules(self) -> nn.ModuleList:
         module_list = nn.ModuleList()
@@ -52,6 +70,7 @@ class Bonsai(torch.nn.Module):
         counter = Counter()
         # iterate over module definitions to create and add modules to bonsai model
         for module_cfg in self.module_cfgs:
+            seq = nn.Sequential()
             # TODO - maybe take names from original parsed model after jit traced parsing is implemented
             module_type = module_cfg['type']
             counter[module_type] += 1
@@ -62,7 +81,8 @@ class Bonsai(torch.nn.Module):
             module_creator = BonsaiFactory.get_creator(module_type)
             # create the module using the creator and module cfg
             module = module_creator(self, module_cfg)
-            module_list.add_module(module_name, module)
+            seq.add_module(module_name, module)
+            module_list.append(seq)
         return module_list
 
     # TODO - needs rewriting
