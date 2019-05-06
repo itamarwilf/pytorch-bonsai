@@ -1,15 +1,16 @@
 from bonsai import Bonsai
 import torch
+import pytest
 
 
 def test_build_unet():
-    cfg_path = "/home/itamar/Documents/pytorch-bonsai/example_configs/U-NET.cfg"
+    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
     _ = Bonsai(cfg_path)
     return
 
 
 def test_run_unet():
-    cfg_path = "/home/itamar/Documents/pytorch-bonsai/example_configs/U-NET.cfg"
+    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
     model = Bonsai(cfg_path)
     model_input = torch.rand(1, 4, 256, 256)
     model_output = model(model_input)
@@ -28,3 +29,13 @@ def test_module_list():
     cfg_path = "model_cfgs_for_tests/pconv2d.cfg"
     model = Bonsai(cfg_path)
     print(model.module_list)
+
+
+def test_total_prunable_filters():
+    cfg_path = "model_cfgs_for_tests/pconv2d.cfg"
+    model = Bonsai(cfg_path)
+    assert model.total_prunable_filters() == 32
+    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
+    model = Bonsai(cfg_path)
+    assert model.total_prunable_filters() == 3424
+
