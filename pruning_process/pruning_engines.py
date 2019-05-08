@@ -118,7 +118,7 @@ def create_supervised_ranker(model, loss_fn,
         x, y = prepare_batch(batch, device, non_blocking=non_blocking)
         y_pred = model(x)
         loss = loss_fn(y_pred, y)
-         loss.backward()
+        loss.backward()
         return loss.item()
 
     return Engine(_update)
