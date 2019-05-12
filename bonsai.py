@@ -7,10 +7,9 @@ from collections import Counter
 from modules.abstract_bonsai_classes import Prunable, BonsaiModule
 from modules.factories.bonsai_module_factory import BonsaiFactory
 from modules.model_cfg_parser import parse_model_cfg
-
-from pruning_process.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
+from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
     create_supervised_ranker
-from pruning_process.abstract_prunner import AbstractPrunner
+from pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
 
 
 class Bonsai:
@@ -24,20 +23,30 @@ class Bonsai:
 
     """
 
-    def __init__(self, model_cfg_path: str, prunner: AbstractPrunner = None):
+    def __init__(self, model_cfg_path: str, prunner=None):
         self.model = BonsaiModel(model_cfg_path, self)
-        self.prunner = prunner
+        if prunner is not None and isinstance(prunner(self), AbstractPrunner):
+            self.prunner = prunner(self)
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        self.to_prune = False
 
     def __call__(self, *args, **kwargs):
-        self.model(*args, **kwargs)
+        return self.model(*args, **kwargs)
+
+    def rank(self, rank_dl, criterion):
+        self.model.to_rank = True
+        self.prunner.set_up()
+        if not isinstance(self.prunner, WeightBasedPrunner):
+            ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion)
+            ranker_engine.run(rank_dl, max_epochs=1)
+        self.prunner.compute_model_ranks()
+        if self.prunner.normalize:
+            self.prunner.normalize_ranks()
 
     def prune(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
 
-        if self._mediator.ranking_function is None:
-            raise NotImplementedError("you need to add a pruning function to Bonsai model to run pruning")
+        if self.prunner is None:
+            raise ValueError("you need a prunner object in the Bonsai model to run pruning")
 
         # TODO - remove writer? replace with pickling or graph for pruning?
         # writer = SummaryWriter()
@@ -49,31 +58,29 @@ class Bonsai:
 
         num_filters_to_prune = np.floor(prune_percent * self.model.total_num_filters())
 
-        for pruning_iteration in range(prune_percent):
+        for iteration in range(iterations):
             # run ranking engine on val dataset
-            self.to_prune = True
-            ranker_engine = create_supervised_ranker(self, criterion)
-            ranker_engine.run(eval_dl, max_epochs=1)
+            self.model.to_rank = True
+            if not isinstance(self.prunner, WeightBasedPrunner):
+                ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion)
+                ranker_engine.run(eval_dl, max_epochs=1)
 
             # prune model and init optimizer, etc
-            model.normalize_ranks_per_layer()
             # TODO check for duplicates
-            pruning_targets = model.get_prunning_plan(num_filters_to_prune)
+            pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
 
             # run training engine on train dataset (and log recovery using val dataset and engine)
 
             # optimizer = get_optimizer(model)
-            trainer = create_supervised_trainer(model, optimizer, criterion)
-            attach_trainer_events(trainer, model, scheduler=None)
-
-            metrics = {"L1": MeanAbsoluteError(), "L2": MeanSquaredError()}
-
-            val_evaluator = create_supervised_evaluator(model, metrics=metrics)
-            attach_eval_events(trainer, val_evaluator, eval_dataloader, writer, "Val")
-
-            trainer.run(train_dataloader, prune_cfg['recovery_epochs'])
-
-
+            # trainer = create_supervised_trainer(model, optimizer, criterion)
+            # attach_trainer_events(trainer, model, scheduler=None)
+            #
+            # metrics = {"L1": MeanAbsoluteError(), "L2": MeanSquaredError()}
+            #
+            # val_evaluator = create_supervised_evaluator(model, metrics=metrics)
+            # attach_eval_events(trainer, val_evaluator, eval_dataloader, writer, "Val")
+            #
+            # trainer.run(train_dataloader, prune_cfg['recovery_epochs'])
 
 
 class BonsaiModel(torch.nn.Module):
@@ -82,19 +89,28 @@ class BonsaiModel(torch.nn.Module):
         """
         Used to mediate between Bonsai model and its modules, while avoiding circular referencing of torch.nn.Modules
         """
-        def __init__(self, bonsai=None):
+        def __init__(self, model=None):
             super().__init__()
-            self.output_channels: List[int] = []
-            self.layer_outputs: List[torch.Tensor] = []
-            self.model_output = []
+            self.model = model
 
-    def __init__(self, cfg_path):
+        def __getattribute__(self, item):
+            try:
+                return super().__getattribute__(item)
+            except AttributeError:
+                return self.model.__getattribute__(item)
+
+    def __init__(self, cfg_path, bonsai):
         super(BonsaiModel, self).__init__()
+        self.bonsai = bonsai
         self.device = None
 
-        self._mediator = self._Mediator()
+        self._mediator = self._Mediator(self)
+        self.output_channels: List[int] = []
+        self.layer_outputs: List[torch.Tensor] = []
+        self.model_output = []
 
         self.last_pruned = None
+        self.to_rank = False
 
         self.module_cfgs = parse_model_cfg(cfg_path)  # type: List[dict]
         self.hyperparams = self.module_cfgs.pop(0)  # type: dict
@@ -109,9 +125,9 @@ class BonsaiModel(torch.nn.Module):
             x = module(x)
             self._mediator.layer_outputs.append(x)
             if module.module_cfg.get("output"):
-                self._mediator.model_output.append(x)
+                self.model_output.append(x)
 
-        return self._mediator.model_output
+        return self.model_output
 
     def _create_bonsai_modules(self) -> nn.ModuleList:
         module_list = nn.ModuleList()

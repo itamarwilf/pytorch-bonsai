@@ -111,12 +111,15 @@ class PBConv2d(AbstractBConv2d, Prunable):
     def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super().__init__(bonsai_model, module_cfg)
 
+    def get_weights(self) -> torch.Tensor:
+        return self.conv2d.weight.data
+
     def forward(self, layer_input):
         x = self.conv2d(layer_input)
 
-        if self.bonsai_model.to_prune:
-            x.register_hook(self.bonsai_model.pruning_func)
+        if self.bonsai_model.to_rank:
             self.activation = x
+            x.register_hook(self.bonsai_model.pruning_func)
 
         if self.f is not None:
             x = self.f(x)
@@ -216,12 +219,15 @@ class BDeconv2d(AbstractBDeconv2d):
 
 class PBDeconv2d(AbstractBDeconv2d, Prunable):
 
+    def get_weights(self) -> torch.Tensor:
+        return self.deconv2d.weight.data.permute(1, 0, 2, 3)
+
     def forward(self, layer_input):
         x = self.deconv2d(layer_input)
 
-        if self.bonsai_model.to_prune:
-            x.register_hook(self.bonsai_model.pruning_func)
+        if self.bonsai_model.to_rank:
             self.activation = x
+            x.register_hook(self.bonsai_model.pruning_func)
 
         if self.bn is not None:
             x = self.bn(x)
