@@ -1,5 +1,5 @@
 from typing import Dict, Any
-
+import torch
 from torch import nn
 
 
@@ -18,12 +18,32 @@ class BonsaiModule(nn.Module):
         raise NotImplementedError
 
 
-class Prunable:
+class Prunable(BonsaiModule):
     """
     interface of prunable Bonsai modules
     """
-    def __init__(self):
+
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+        super().__init__(bonsai_model, module_cfg)
+        self.weights = None
         self.activation = None
+        self.grad = None
+        self.ranking = torch.zeros(self.module_cfg["out_channels"])
+
+    @staticmethod
+    def _parse_module_cfg(module_cfg: dict) -> dict:
+        raise NotImplementedError
+
+    def forward(self, layer_input):
+        raise NotImplementedError
+
+    def get_weights(self) -> torch.Tensor:
+        """
+        used to return weights with with output channels in the first dim. this is used for general implementation of
+        ranking, and later each prunable module will handle the pruning based on the ranks regardless of his dim order
+        :return: weights of prunabe module
+        """
+        raise NotImplementedError
 
     def prune_output(self):
         raise NotImplementedError
@@ -31,22 +51,6 @@ class Prunable:
     def prune_input(self):
         raise NotImplementedError
 
-    def _prune_params(self, grad):
-        # TODO call bonsai model channel ranking func
-        print(grad.size())
-        # activation_index = len(self.activations) - self.grad_index - 1
-        # activation = self.activations[activation_index]
-        # values = \
-        #     torch.sum((activation * grad), dim=0). \
-        #         sum(dim=2).sum(dim=3)[0, :, 0, 0].data
-        #
-        # # Normalize the rank by the filter dimensions
-        # values = \
-        #     values / (activation.size(0) * activation.size(2) * activation.size(3))
-        #
-        # if activation_index not in self.filter_ranks:
-        #     self.filter_ranks[activation_index] = \
-        #         torch.FloatTensor(activation.size(1)).zero_().cuda()
-        #
-        # self.filter_ranks[activation_index] += values
-        # self.grad_index += 1
+    def reset(self):
+        self.ranking = torch.zeros(self.module_cfg["out_channels"])
+

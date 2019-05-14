@@ -1,6 +1,7 @@
 import torch
 from ignite.engine.engine import Engine
 from ignite.utils import convert_tensor
+from pruning.abstract_prunners import AbstractPrunner, GradBasedPrunner
 
 
 def _prepare_batch(batch, device=None, non_blocking=False):
@@ -90,7 +91,7 @@ def create_supervised_evaluator(model, metrics={},
 
 
 # TODO needs documentation
-def create_supervised_ranker(model, loss_fn,
+def create_supervised_ranker(model, prunner: AbstractPrunner, loss_fn,
                              device=None, non_blocking=True,
                              prepare_batch=_prepare_batch):
     """
@@ -98,7 +99,7 @@ def create_supervised_ranker(model, loss_fn,
 
     Args:
         model (`torch.nn.Module`): the model to train
-        optimizer (`torch.optim.Optimizer`): the optimizer to use
+        prunner (`torch.optim.Optimizer`): the optimizer to use
         loss_fn (torch.nn loss function): the loss function to use
         device (str, optional): device type specification (default: None).
             Applies to both model and batches.
@@ -118,7 +119,8 @@ def create_supervised_ranker(model, loss_fn,
         x, y = prepare_batch(batch, device, non_blocking=non_blocking)
         y_pred = model(x)
         loss = loss_fn(y_pred, y)
-        loss.backward()
+        if isinstance(prunner, GradBasedPrunner):
+            loss.backward()
         return loss.item()
 
     return Engine(_update)

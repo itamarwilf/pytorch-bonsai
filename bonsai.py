@@ -1,45 +1,129 @@
 import torch
 from torch import nn
-
-from modules.factories.bonsai_module_factory import BonsaiFactory
-from modules.model_cfg_parser import parse_model_cfg
-from typing import List, Dict
+import numpy as np
+from typing import List
 from collections import Counter
 
+from modules.abstract_bonsai_classes import Prunable, BonsaiModule
+from modules.factories.bonsai_module_factory import BonsaiFactory
+from modules.model_cfg_parser import parse_model_cfg
+from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
+    create_supervised_ranker
+from pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
 
-class Bonsai(torch.nn.Module):
 
-    def __init__(self, cfg_path):
-        super(Bonsai, self).__init__()
+class Bonsai:
+    """
+    main class of the library, which contains the following components:
+    - model: built of simple, prunable pytorch layers
+    - prunner: an object in charge of the pruning process
+
+    the interaction between the components is as followed:
+    the prunner includes instructions of performing the pruning
+
+    """
+
+    def __init__(self, model_cfg_path: str, prunner=None):
+        self.model = BonsaiModel(model_cfg_path, self)
+        if prunner is not None and isinstance(prunner(self), AbstractPrunner):
+            self.prunner = prunner(self)
+
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+    def __call__(self, *args, **kwargs):
+        return self.model(*args, **kwargs)
+
+    def rank(self, rank_dl, criterion):
+        self.model.to_rank = True
+        self.prunner.set_up()
+        if not isinstance(self.prunner, WeightBasedPrunner):
+            ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion)
+            ranker_engine.run(rank_dl, max_epochs=1)
+        self.prunner.compute_model_ranks()
+        if self.prunner.normalize:
+            self.prunner.normalize_ranks()
+
+    def prune(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
+
+        if self.prunner is None:
+            raise ValueError("you need a prunner object in the Bonsai model to run pruning")
+
+        # TODO - remove writer? replace with pickling or graph for pruning?
+        # writer = SummaryWriter()
+        # init prunner and engines
+
+        # train_dataloader, eval_dataloader = get_dataloaders()
+
+        self.model.to(device)
+
+        num_filters_to_prune = np.floor(prune_percent * self.model.total_num_filters())
+
+        for iteration in range(iterations):
+            # run ranking engine on val dataset
+            self.model.to_rank = True
+            if not isinstance(self.prunner, WeightBasedPrunner):
+                ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion)
+                ranker_engine.run(eval_dl, max_epochs=1)
+
+            # prune model and init optimizer, etc
+            # TODO check for duplicates
+            pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
+
+            # run training engine on train dataset (and log recovery using val dataset and engine)
+
+            # optimizer = get_optimizer(model)
+            # trainer = create_supervised_trainer(model, optimizer, criterion)
+            # attach_trainer_events(trainer, model, scheduler=None)
+            #
+            # metrics = {"L1": MeanAbsoluteError(), "L2": MeanSquaredError()}
+            #
+            # val_evaluator = create_supervised_evaluator(model, metrics=metrics)
+            # attach_eval_events(trainer, val_evaluator, eval_dataloader, writer, "Val")
+            #
+            # trainer.run(train_dataloader, prune_cfg['recovery_epochs'])
+
+
+class BonsaiModel(torch.nn.Module):
+
+    class _Mediator:
+        """
+        Used to mediate between Bonsai model and its modules, while avoiding circular referencing of torch.nn.Modules
+        """
+        def __init__(self, model=None):
+            super().__init__()
+            self.model = model
+
+        def __getattribute__(self, item):
+            try:
+                return super().__getattribute__(item)
+            except AttributeError:
+                return self.model.__getattribute__(item)
+
+    def __init__(self, cfg_path, bonsai):
+        super(BonsaiModel, self).__init__()
+        self.bonsai = bonsai
         self.device = None
+
+        self._mediator = self._Mediator(self)
         self.output_channels: List[int] = []
         self.layer_outputs: List[torch.Tensor] = []
         self.model_output = []
 
         self.last_pruned = None
-        self.prune = False
+        self.to_rank = False
 
         self.module_cfgs = parse_model_cfg(cfg_path)  # type: List[dict]
         self.hyperparams = self.module_cfgs.pop(0)  # type: dict
         self.module_list = self._create_bonsai_modules()
 
+    def __call__(self, *args, **kwargs):
+        return super().__call__(*args, **kwargs)
+
     def forward(self, x):
 
         for i, module in enumerate(self.module_list):
             x = module(x)
-            # mtype = module_cfg['type']
-            # if mtype in ['convolutional', 'upsample', 'maxpool']:
-            #     x = module(x)
-            # elif mtype == 'route':
-            #     layer_i = [int(x) for x in module_cfg['layers'].split(',')]
-            #     if len(layer_i) == 1:
-            #         x = layer_outputs[layer_i[0]]
-            #     else:
-            #         x = torch.cat([layer_outputs[i] for i in layer_i], 1)
-            # elif mtype == 'shortcut':
-            #     layer_i = int(module_cfg['from'])
-            #     x = layer_outputs[-1] + layer_outputs[layer_i]
-            self.layer_outputs.append(x)
+            self._mediator.layer_outputs.append(x)
             if module.module_cfg.get("output"):
                 self.model_output.append(x)
 
@@ -48,7 +132,7 @@ class Bonsai(torch.nn.Module):
     def _create_bonsai_modules(self) -> nn.ModuleList:
         module_list = nn.ModuleList()
         # number of input channels for next layer is taken from prev layer output channels (or model input)
-        self.output_channels.append(int(self.hyperparams['in_channels']))
+        self._mediator.output_channels.append(int(self.hyperparams['in_channels']))
         counter = Counter()
         # iterate over module definitions to create and add modules to bonsai model
         for module_cfg in self.module_cfgs:
@@ -61,60 +145,13 @@ class Bonsai(torch.nn.Module):
             # get the module creator based on type
             module_creator = BonsaiFactory.get_creator(module_type)
             # create the module using the creator and module cfg
-            module = module_creator(self, module_cfg)
-            module_list.add_module(module_name, module)
+            module = module_creator(self._mediator, module_cfg)
+            module_list.append(module)
         return module_list
 
-    # TODO - needs rewriting
-    def total_num_filters(self):
+    def total_prunable_filters(self):
         filters = 0
-        for mod_def in self.module_cfgs:
-            if mod_def["type"] == "convolutional" and "avoid_pruning" not in mod_def.keys():
-                filters += int(mod_def["filters"])
+        for module in self.module_list:
+            if isinstance(module, Prunable):
+                filters += int(module.module_cfg.get("out_channels"))
         return filters
-
-    def prune(self, device, train_dataloader, eval_dataloader, optimizer, criterion, pruning_percentage=0.1,
-              pruning_iterations=9):
-
-        # TODO - remove writer? replace with pickling or graph for pruning?
-        # writer = SummaryWriter()
-        # init prunner and engines
-
-        # train_dataloader, eval_dataloader = get_dataloaders()
-
-        # _, device = set_cuda()
-
-        # model = NNFactory(prune_cfg["model"])
-        # original_state_dict = torch.load('final.pt')
-        # new_state_dict = model.state_dict()
-        # for k, v in zip(new_state_dict.keys(), original_state_dict.values()):
-        #     new_state_dict[k] = v
-        # model.load_state_dict(new_state_dict)
-        self.to(device)
-
-        num_filters_to_prune = pruning_percentage * total_num_filters(model)
-
-        for iter in range(pruning_iterations):
-            # run ranking engine on val dataset
-            model.prune = True
-            ranker_engine = create_supervised_ranker(model, criterion)
-            ranker_engine.run(eval_dataloader, max_epochs=1)
-
-            # prune model and init optimizer, etc
-            model.normalize_ranks_per_layer()
-            # TODO check for duplicates
-            pruning_targets = model.get_prunning_plan(num_filters_to_prune)
-
-            # run training engine on train dataset (and log recovery using val dataset and engine)
-
-            optimizer = get_optimizer(model)
-            trainer = create_supervised_trainer(model, optimizer, criterion)
-            attach_trainer_events(trainer, model, scheduler=None)
-
-            metrics = {"L1": MeanAbsoluteError(), "L2": MeanSquaredError()}
-
-            val_evaluator = create_supervised_evaluator(model, metrics=metrics)
-            attach_eval_events(trainer, val_evaluator, eval_dataloader, writer, "Val")
-
-            trainer.run(train_dataloader, prune_cfg['recovery_epochs'])
-

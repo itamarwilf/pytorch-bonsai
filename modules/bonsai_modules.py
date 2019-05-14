@@ -29,7 +29,7 @@ GLOBAL_MODULE_CFGS = ["type", "name", "output"]
 
 class AbstractBConv2d(BonsaiModule):
 
-    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(AbstractBConv2d, self).__init__(bonsai_model, module_cfg)
 
         self.bn = None
@@ -45,7 +45,7 @@ class AbstractBConv2d(BonsaiModule):
         module_cfg['in_channels'] = bonsai_model.output_channels[-1]
         self.conv2d = call_constructor_with_cfg(nn.Conv2d, module_cfg)
         # pass output channels to next module using bonsai model
-        self.bonsai_model.output_channels.append(module_cfg['out_channels'])
+        bonsai_model.output_channels.append(module_cfg['out_channels'])
 
     @staticmethod
     def _parse_module_cfg(module_cfg: dict) -> dict:
@@ -92,6 +92,9 @@ class AbstractBConv2d(BonsaiModule):
 
 class BConv2d(AbstractBConv2d):
 
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
+        super().__init__(bonsai_model, module_cfg)
+
     def forward(self, layer_input):
         x = self.conv2d(layer_input)
 
@@ -105,12 +108,18 @@ class BConv2d(AbstractBConv2d):
 
 class PBConv2d(AbstractBConv2d, Prunable):
 
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
+        super().__init__(bonsai_model, module_cfg)
+
+    def get_weights(self) -> torch.Tensor:
+        return self.conv2d.weight.data
+
     def forward(self, layer_input):
         x = self.conv2d(layer_input)
 
-        if self.bonsai_model.prune:
-            x.register_hook(self.bonsai_model.pruning_func)
+        if self.bonsai_model.to_rank:
             self.activation = x
+            x.register_hook(self.bonsai_model.pruning_func)
 
         if self.f is not None:
             x = self.f(x)
@@ -135,7 +144,7 @@ class PBConv2d(AbstractBConv2d, Prunable):
 
 class AbstractBDeconv2d(BonsaiModule):
 
-    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(AbstractBDeconv2d, self).__init__(bonsai_model, module_cfg)
 
         self.bn = None
@@ -151,7 +160,7 @@ class AbstractBDeconv2d(BonsaiModule):
         module_cfg['in_channels'] = bonsai_model.output_channels[-1]
         self.deconv2d = call_constructor_with_cfg(nn.ConvTranspose2d, module_cfg)
         # pass output channels to next module using bonsai model
-        self.bonsai_model.output_channels.append(module_cfg['out_channels'])
+        bonsai_model.output_channels.append(module_cfg['out_channels'])
 
     @staticmethod
     def _parse_module_cfg(module_cfg: dict) -> dict:
@@ -210,12 +219,15 @@ class BDeconv2d(AbstractBDeconv2d):
 
 class PBDeconv2d(AbstractBDeconv2d, Prunable):
 
+    def get_weights(self) -> torch.Tensor:
+        return self.deconv2d.weight.data.permute(1, 0, 2, 3)
+
     def forward(self, layer_input):
         x = self.deconv2d(layer_input)
 
-        if self.bonsai_model.prune:
-            x.register_hook(self.bonsai_model.pruning_func)
+        if self.bonsai_model.to_rank:
             self.activation = x
+            x.register_hook(self.bonsai_model.pruning_func)
 
         if self.bn is not None:
             x = self.bn(x)
@@ -235,12 +247,12 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
 
 class BRoute(BonsaiModule):
 
-    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(BRoute, self).__init__(bonsai_model, module_cfg)
         # sum all the channels of concatenated tensors
         out_channels = sum([bonsai_model.output_channels[layer_i] for layer_i in self.module_cfg["layers"]])
         # pass output channels to next module using bonsai model
-        self.bonsai_model.output_channels.append(out_channels)
+        bonsai_model.output_channels.append(out_channels)
 
     @staticmethod
     def _parse_module_cfg(module_cfg: dict) -> dict:
@@ -264,12 +276,12 @@ class BRoute(BonsaiModule):
 
 class BPixelShuffle(BonsaiModule):
 
-    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(BPixelShuffle, self).__init__(bonsai_model, module_cfg)
         self.pixel_shuffle = call_constructor_with_cfg(nn.PixelShuffle, self.module_cfg)
         # calc number of output channels using input channels and scaling factor
         out_channels = bonsai_model.output_channels[-1] / (self.module_cfg["upscale_factor"] ** 2)
-        self.bonsai_model.output_channels.append(out_channels)
+        bonsai_model.output_channels.append(out_channels)
 
     @staticmethod
     def _parse_module_cfg(module_cfg: dict) -> dict:
@@ -293,11 +305,11 @@ class BPixelShuffle(BonsaiModule):
 
 class BMaxpool(BonsaiModule):
 
-    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(BMaxpool, self).__init__(bonsai_model, module_cfg)
         self.maxpool = call_constructor_with_cfg(nn.MaxPool2d, self.module_cfg)
         # since max pooling doesn't change the tensor's number of channels, re append previous output channels
-        self.bonsai_model.output_channels.append(self.bonsai_model.output_channels[-1])
+        bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
 
     @staticmethod
     def _parse_module_cfg(module_cfg: dict) -> dict:
