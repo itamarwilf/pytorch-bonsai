@@ -106,6 +106,10 @@ class BonsaiModel(torch.nn.Module):
 
         self._mediator = self._Mediator(self)
         self.output_channels: List[int] = []
+        self.feature_map_size: List[int] = []
+        self.kernel_sizes: List[int] = []
+        self.strides: List[int] = []
+
         self.layer_outputs: List[torch.Tensor] = []
         self.model_output = []
 
@@ -129,10 +133,11 @@ class BonsaiModel(torch.nn.Module):
 
         return self.model_output
 
+    # TODO needs design for nn.Linear construction, including feature map size, strides, kernel sizes, etc.
     def _create_bonsai_modules(self) -> nn.ModuleList:
         module_list = nn.ModuleList()
         # number of input channels for next layer is taken from prev layer output channels (or model input)
-        self._mediator.output_channels.append(int(self.hyperparams['in_channels']))
+        self.output_channels.append(int(self.hyperparams['in_channels']))
         counter = Counter()
         # iterate over module definitions to create and add modules to bonsai model
         for module_cfg in self.module_cfgs:
@@ -146,6 +151,14 @@ class BonsaiModel(torch.nn.Module):
             module_creator = BonsaiFactory.get_creator(module_type)
             # create the module using the creator and module cfg
             module = module_creator(self._mediator, module_cfg)
+            # TODO take parsed cfg from module and accumulate strides, kernels, and calc feature map stride if possible
+            # TODO have a list of layers that allow for receptive field calculations (fuck linear layers)
+            # parsed_cfg = module.module_cfg
+            # n_out = np.floor(n_in + 2 * padding - kernel_size / stride) -1 #activation map size
+            # jump_out = jump_in * stride #jump in features (equivalent to the accumulated stride)
+            # r_out = r_in + (kernel_size-1) * j_in
+            # start_out = start_in + ( (kernel_size - 1) / 2 - p) * j_in # note: can be discarded
+
             module_list.append(module)
         return module_list
 
