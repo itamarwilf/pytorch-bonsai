@@ -14,7 +14,7 @@ def test_run_unet():
     model = Bonsai(cfg_path)
     model_input = torch.rand(1, 3, 32, 32)
     model_output = model(model_input)
-    assert model_output[0].size() == (1, 10, 1, 1)
+    assert model_output[0].size() == (1, 10)
 
 
 

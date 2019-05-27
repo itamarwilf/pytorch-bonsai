@@ -22,6 +22,10 @@ class AbstractPrunner:
         for _, module in self.prunable_modules_iterator():
             module.weights = module.get_weights()
 
+    def reset(self):
+        for _, module in self.prunable_modules_iterator():
+            module.reset()
+
     def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         """
         attaches hooks for needed actions during forward / backward pass of prunable modules

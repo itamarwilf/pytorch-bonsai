@@ -3,6 +3,7 @@ from torch import nn
 import numpy as np
 from typing import List
 from collections import Counter
+from ignite.engine import Events
 
 from modules.abstract_bonsai_classes import Prunable, BonsaiModule
 from modules.factories.bonsai_module_factory import BonsaiFactory
@@ -38,10 +39,20 @@ class Bonsai:
         self.prunner.set_up()
         if not isinstance(self.prunner, WeightBasedPrunner):
             ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion)
+            # add event hook for accumulation of scores over the dataset
+            ranker_engine.add_event_handler(Events.ITERATION_COMPLETED, self.prunner.compute_model_ranks)
+            # add event hook for accumulation
+            # ranker_engine.add_event_handler(Events.ITERATION_STARTED, self.prunner.reset)
             ranker_engine.run(rank_dl, max_epochs=1)
-        self.prunner.compute_model_ranks()
+        else:
+            self.prunner.compute_model_ranks()
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
+
+    def finetune(self, train_dl, optimizer, criterion, max_epochs=10):
+        self.model.to_rank = False
+        finetune_engine = create_supervised_trainer(self.model, optimizer, criterion, self.device)
+        finetune_engine.run(train_dl, max_epochs=max_epochs)
 
     def prune(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
 

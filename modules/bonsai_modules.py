@@ -366,6 +366,20 @@ class BGlobalAvgPool(BonsaiModule):
         torch.mean(layer_input, dim=(2, 3))
 
 
+class BFlatten(BonsaiModule):
+
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+        super(BFlatten, self).__init__(bonsai_model, module_cfg)
+        bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
+
+    @staticmethod
+    def _parse_module_cfg(module_cfg: dict) -> dict:
+        return module_cfg
+
+    def forward(self, layer_input):
+        n,  _, _, _ = layer_input.size()
+        return layer_input.view(n, -1)
+
 # TODO linear layer needs more complicated implementaion
 # class BLinear(BonsaiModule):
 #
