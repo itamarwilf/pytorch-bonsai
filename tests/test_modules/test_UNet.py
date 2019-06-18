@@ -1,6 +1,5 @@
-from bonsai import BonsaiModel, Bonsai
+from bonsai import Bonsai
 import torch
-import pytest
 
 
 def test_build_unet():

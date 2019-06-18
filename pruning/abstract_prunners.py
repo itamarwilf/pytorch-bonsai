@@ -42,10 +42,10 @@ class AbstractPrunner:
         """
         raise NotImplementedError
 
-    def compute_model_ranks(self):
+    def compute_model_ranks(self, engine=None):
         for _, module in self.prunable_modules_iterator():
             layer_current_ranks = self.compute_single_layer_ranks(module)
-            module.ranking += layer_current_ranks
+            module.ranking += layer_current_ranks.cpu()
 
     @staticmethod
     def normalize_filter_ranks_per_layer(module: Prunable):
@@ -54,8 +54,8 @@ class AbstractPrunner:
         [1611.06440 Pruning Convolutional Neural Networks for Resource Efficient Inference]
         :return: None
         """
-        v = np.abs(module.ranking)
-        v = v / np.sqrt(np.sum(v * v))
+        v = torch.abs(module.ranking)
+        v = v / torch.sqrt(torch.sum(v * v))
         module.ranking = v
 
     def normalize_ranks(self):
@@ -87,21 +87,27 @@ class AbstractPrunner:
 
         for l in filters_to_prune_per_layer:
             filters_to_prune_per_layer[l] = sorted(filters_to_prune_per_layer[l])
-            for i in range(len(filters_to_prune_per_layer[l])):
-                filters_to_prune_per_layer[l][i] = filters_to_prune_per_layer[l][i] - i
+        #     for i in range(len(filters_to_prune_per_layer[l])):
+        #         filters_to_prune_per_layer[l][i] = filters_to_prune_per_layer[l][i] - i
+        #
+        # filters_to_prune = []
+        # for l in filters_to_prune_per_layer:
+        #     for i in filters_to_prune_per_layer[l]:
+        #         filters_to_prune.append((l, i))
 
-        filters_to_prune = []
-        for l in filters_to_prune_per_layer:
-            for i in filters_to_prune_per_layer[l]:
-                filters_to_prune.append((l, i))
+        return filters_to_prune_per_layer
 
-        return filters_to_prune
+    def inverse_pruning_targets(self, pruning_targets):
+        for i, module in self.prunable_modules_iterator():
+            if i in pruning_targets.keys():
+                pruning_targets[i] = [x for x in range(len(module.ranking)) if x not in pruning_targets[i]]
+        return pruning_targets
 
 
 class WeightBasedPrunner(AbstractPrunner):
 
-    def __init__(self, bonsai):
-        super().__init__(bonsai)
+    def __init__(self, bonsai, normalize=False):
+        super().__init__(bonsai, normalize)
 
     def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         pass
@@ -113,8 +119,8 @@ class WeightBasedPrunner(AbstractPrunner):
 
 class ActivationBasedPrunner(AbstractPrunner):
 
-    def __init__(self, bonsai):
-        super().__init__(bonsai)
+    def __init__(self, bonsai, normalize=False):
+        super().__init__(bonsai, normalize)
 
     def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         module.activation = x
@@ -126,8 +132,8 @@ class ActivationBasedPrunner(AbstractPrunner):
 
 class GradBasedPrunner(AbstractPrunner):
 
-    def __init__(self, bonsai):
-        super().__init__(bonsai)
+    def __init__(self, bonsai, normalize=False):
+        super().__init__(bonsai, normalize)
 
     def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         module.activation = x

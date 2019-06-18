@@ -1,11 +1,14 @@
 import torch
 from torch import nn
 import numpy as np
+import copy
 from typing import List
 from collections import Counter
 from ignite.engine import Events
-
-from modules.abstract_bonsai_classes import Prunable, BonsaiModule
+# from ignite.contrib.handlers import ProgressBar
+from ignite.metrics import Accuracy
+from utils.progress_bar import Progbar
+from modules.abstract_bonsai_classes import Prunable
 from modules.factories.bonsai_module_factory import BonsaiFactory
 from modules.model_cfg_parser import parse_model_cfg
 from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
@@ -24,10 +27,10 @@ class Bonsai:
 
     """
 
-    def __init__(self, model_cfg_path: str, prunner=None):
+    def __init__(self, model_cfg_path: str, prunner=None, normalize=False):
         self.model = BonsaiModel(model_cfg_path, self)
         if prunner is not None and isinstance(prunner(self), AbstractPrunner):
-            self.prunner = prunner(self)
+            self.prunner = prunner(self, normalize=normalize)
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -35,13 +38,16 @@ class Bonsai:
         return self.model(*args, **kwargs)
 
     def rank(self, rank_dl, criterion):
+        print("Ranking")
         self.model.to_rank = True
         self.prunner.set_up()
         if not isinstance(self.prunner, WeightBasedPrunner):
-            ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion)
+            ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion, device=self.device)
+            # add progress bar
+            pbar = Progbar(rank_dl, metrics='none')
+            ranker_engine.add_event_handler(Events.ITERATION_COMPLETED, pbar)
             # add event hook for accumulation of scores over the dataset
             ranker_engine.add_event_handler(Events.ITERATION_COMPLETED, self.prunner.compute_model_ranks)
-            # add event hook for accumulation
             # ranker_engine.add_event_handler(Events.ITERATION_STARTED, self.prunner.reset)
             ranker_engine.run(rank_dl, max_epochs=1)
         else:
@@ -49,12 +55,57 @@ class Bonsai:
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
 
-    def finetune(self, train_dl, optimizer, criterion, max_epochs=10):
+    def finetune(self, train_dl, optimizer, criterion, max_epochs=3):
+        print("Recovery")
         self.model.to_rank = False
         finetune_engine = create_supervised_trainer(self.model, optimizer, criterion, self.device)
+        pbar = Progbar(train_dl, metrics='none')
+        finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, pbar)
         finetune_engine.run(train_dl, max_epochs=max_epochs)
 
-    def prune(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
+    def eval(self, eval_dl):
+        print("Evaluation")
+        val_evaluator = create_supervised_evaluator(self.model, metrics={"acc": Accuracy()}, device=self.device)
+        # TODO - add eval handlers and plotting
+        pbar = Progbar(eval_dl, metrics='none')
+        val_evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
+        val_evaluator.run(eval_dl, 1)
+
+    def write_pruned_recipe(self, output_path, pruning_targets):
+        with open(output_path, 'w')as f:
+            for i, block in enumerate(self.model.full_cfg):
+                for k, v in block.items():
+                    if k == 'type':
+                        f.write('[' + v + ']')
+                    elif k == 'out_channels' and i - 1 in pruning_targets.keys():
+                        f.write(k + '=' + str(len(pruning_targets[i - 1])))
+                    else:
+                        f.write(k + '=' + str(v))
+                    f.write('\n')
+                f.write('\n')
+
+    def prune_model(self, num_filters_to_prune, iter_num):
+        pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
+        filters_to_keep = self.prunner.inverse_pruning_targets(pruning_targets)
+        out_path = f"pruning_iteration_{iter_num}.cfg"
+
+        self.write_pruned_recipe(out_path, filters_to_keep)
+
+        self.model.propagate_pruning_targets(filters_to_keep)
+        new_model = BonsaiModel(out_path, self)
+
+        self.model.cpu()
+
+        final_pruning_targets = self.model.pruning_targets
+
+        for i, (old_module, new_module) in enumerate(zip(self.model.module_list, new_model.module_list)):
+            pruned_state_dict = old_module.prune_weights(final_pruning_targets[i+1], final_pruning_targets[i])
+            new_module.load_state_dict(pruned_state_dict)
+
+        del self.model
+        self.model = new_model
+
+    def run_pruning(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
 
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
@@ -67,31 +118,28 @@ class Bonsai:
 
         self.model.to(device)
 
-        num_filters_to_prune = np.floor(prune_percent * self.model.total_num_filters())
+        num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
 
         for iteration in range(iterations):
             # run ranking engine on val dataset
-            self.model.to_rank = True
-            if not isinstance(self.prunner, WeightBasedPrunner):
-                ranker_engine = create_supervised_ranker(self.model, self.prunner, criterion)
-                ranker_engine.run(eval_dl, max_epochs=1)
+            self.rank(eval_dl, criterion)
 
             # prune model and init optimizer, etc
-            # TODO check for duplicates
-            pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
+            self.prune_model(num_filters_to_prune, iteration)
+
+            # eval performance loss
+            self.eval(eval_dl)
 
             # run training engine on train dataset (and log recovery using val dataset and engine)
+            # TODO - move optimizer to bonsai class?
+            optimizer = torch.optim.Adam(self.model.parameters())
 
-            # optimizer = get_optimizer(model)
-            # trainer = create_supervised_trainer(model, optimizer, criterion)
+            # TODO - fix hardcoded recovery epochs
+            self.finetune(train_dl, optimizer, criterion)
+
+
             # attach_trainer_events(trainer, model, scheduler=None)
-            #
-            # metrics = {"L1": MeanAbsoluteError(), "L2": MeanSquaredError()}
-            #
-            # val_evaluator = create_supervised_evaluator(model, metrics=metrics)
             # attach_eval_events(trainer, val_evaluator, eval_dataloader, writer, "Val")
-            #
-            # trainer.run(train_dataloader, prune_cfg['recovery_epochs'])
 
 
 class BonsaiModel(torch.nn.Module):
@@ -124,21 +172,29 @@ class BonsaiModel(torch.nn.Module):
         self.layer_outputs: List[torch.Tensor] = []
         self.model_output = []
 
-        self.last_pruned = None
+        self.pruning_targets = []
         self.to_rank = False
 
-        self.module_cfgs = parse_model_cfg(cfg_path)  # type: List[dict]
+        self.full_cfg = parse_model_cfg(cfg_path)  # type: List[dict]
+        self.module_cfgs = copy.deepcopy(self.full_cfg)
         self.hyperparams = self.module_cfgs.pop(0)  # type: dict
-        self.module_list = self._create_bonsai_modules()
+        self.module_list = self._create_bonsai_modules() # type: nn.ModuleList
 
     def __call__(self, *args, **kwargs):
         return super().__call__(*args, **kwargs)
 
+    def _reset_forward(self):
+
+        self.model_output = []
+        self.layer_outputs = []
+
     def forward(self, x):
+
+        self._reset_forward()
 
         for i, module in enumerate(self.module_list):
             x = module(x)
-            self._mediator.layer_outputs.append(x)
+            self.layer_outputs.append(x)
             if module.module_cfg.get("output"):
                 self.model_output.append(x)
 
@@ -179,3 +235,19 @@ class BonsaiModel(torch.nn.Module):
             if isinstance(module, Prunable):
                 filters += int(module.module_cfg.get("out_channels"))
         return filters
+
+    def propagate_pruning_targets(self, inital_pruning_targets):
+
+        self.pruning_targets = [list(range(self.output_channels[0]))]
+
+        for i, module in enumerate(self.module_list):
+            module_pruing_targets = None
+            if i in inital_pruning_targets.keys():
+                module_pruing_targets = inital_pruning_targets[i]
+            current_target = module.propagate_pruning_target(module_pruing_targets)
+
+            if current_target is None:
+                current_target = []
+            self.pruning_targets.append(current_target)
+
+        # self.pruning_targets = self.pruning_targets[1:]
