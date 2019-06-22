@@ -101,4 +101,4 @@ class TestFullPrune:
         cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
 
-        bonsai.run_pruning(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion)
+        bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion)

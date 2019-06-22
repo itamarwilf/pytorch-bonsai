@@ -5,7 +5,7 @@ import copy
 from typing import List
 from collections import Counter
 from ignite.engine import Events
-# from ignite.contrib.handlers import ProgressBar
+# from ignite.contrib.handlers.tqdm_logger import ProgressBar as Progbar
 from ignite.metrics import Accuracy
 from utils.progress_bar import Progbar
 from modules.abstract_bonsai_classes import Prunable
@@ -105,7 +105,7 @@ class Bonsai:
         del self.model
         self.model = new_model
 
-    def run_pruning(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
+    def run_pruning_loop(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
 
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
