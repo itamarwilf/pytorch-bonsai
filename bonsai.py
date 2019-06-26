@@ -67,7 +67,7 @@ class Bonsai:
         print("Evaluation")
         val_evaluator = create_supervised_evaluator(self.model, metrics={"acc": Accuracy()}, device=self.device)
         # TODO - add eval handlers and plotting
-        pbar = Progbar(eval_dl, metrics='none')
+        pbar = Progbar(eval_dl, metrics='acc')
         val_evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
         val_evaluator.run(eval_dl, 1)
 
@@ -87,6 +87,8 @@ class Bonsai:
     def prune_model(self, num_filters_to_prune, iter_num):
         pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
         filters_to_keep = self.prunner.inverse_pruning_targets(pruning_targets)
+        # for k, v in filters_to_keep.items():
+        #     print(k, len(v))
         out_path = f"pruning_iteration_{iter_num}.cfg"
 
         self.write_pruned_recipe(out_path, filters_to_keep)
@@ -97,30 +99,35 @@ class Bonsai:
         self.model.cpu()
 
         final_pruning_targets = self.model.pruning_targets
-
+        # print("#####", len(final_pruning_targets))
+        # for v in final_pruning_targets:
+        #     print(len(v))
         for i, (old_module, new_module) in enumerate(zip(self.model.module_list, new_model.module_list)):
-            pruned_state_dict = old_module.prune_weights(final_pruning_targets[i+1], final_pruning_targets[i])
+
+            pruned_state_dict = old_module.prune_weights(final_pruning_targets[i + 1], final_pruning_targets[i])
             new_module.load_state_dict(pruned_state_dict)
 
         del self.model
         self.model = new_model
 
-    def run_pruning_loop(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9, device="cuda:0"):
+    def run_pruning_loop(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9,
+                         device="cuda:0"):
 
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
 
         # TODO - remove writer? replace with pickling or graph for pruning?
         # writer = SummaryWriter()
-        # init prunner and engines
-
-        # train_dataloader, eval_dataloader = get_dataloaders()
 
         self.model.to(device)
 
+        assert (prune_percent * iterations < 1, "")
+
         num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
 
+
         for iteration in range(iterations):
+            print(f"######## {iteration} #########")
             # run ranking engine on val dataset
             self.rank(eval_dl, criterion)
 
@@ -132,14 +139,10 @@ class Bonsai:
 
             # run training engine on train dataset (and log recovery using val dataset and engine)
             # TODO - move optimizer to bonsai class?
-            optimizer = torch.optim.Adam(self.model.parameters())
+            model_optimizer = optimizer(self.model.parameters())
 
             # TODO - fix hardcoded recovery epochs
-            self.finetune(train_dl, optimizer, criterion)
-
-
-            # attach_trainer_events(trainer, model, scheduler=None)
-            # attach_eval_events(trainer, val_evaluator, eval_dataloader, writer, "Val")
+            self.finetune(train_dl, model_optimizer, criterion)
 
 
 class BonsaiModel(torch.nn.Module):
@@ -178,7 +181,7 @@ class BonsaiModel(torch.nn.Module):
         self.full_cfg = parse_model_cfg(cfg_path)  # type: List[dict]
         self.module_cfgs = copy.deepcopy(self.full_cfg)
         self.hyperparams = self.module_cfgs.pop(0)  # type: dict
-        self.module_list = self._create_bonsai_modules() # type: nn.ModuleList
+        self.module_list = self._create_bonsai_modules()  # type: nn.ModuleList
 
     def __call__(self, *args, **kwargs):
         return super().__call__(*args, **kwargs)
@@ -219,7 +222,7 @@ class BonsaiModel(torch.nn.Module):
             # create the module using the creator and module cfg
             module = module_creator(self._mediator, module_cfg)
             # TODO take parsed cfg from module and accumulate strides, kernels, and calc feature map stride if possible
-            # TODO have a list of layers that allow for receptive field calculations (fuck linear layers)
+            # TODO have a list of layers that allow for receptive field calculations
             # parsed_cfg = module.module_cfg
             # n_out = np.floor(n_in + 2 * padding - kernel_size / stride) -1 #activation map size
             # jump_out = jump_in * stride #jump in features (equivalent to the accumulated stride)
@@ -249,5 +252,3 @@ class BonsaiModel(torch.nn.Module):
             if current_target is None:
                 current_target = []
             self.pruning_targets.append(current_target)
-
-        # self.pruning_targets = self.pruning_targets[1:]

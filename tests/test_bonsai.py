@@ -37,8 +37,8 @@ def bonsai_blank():
 
 
 @pytest.fixture()
-def optimizer(bonsai_blank):
-    adam = optim.Adam(bonsai_blank.model.parameters(), lr=1e-3)
+def optimizer():
+    adam = optim.Adam
     yield adam
 
 
@@ -66,7 +66,8 @@ def test_bonsai_rank_method_with_weight_prunner():
 class TestBonsaiFinetune:
 
     def test_bonsai_finetune(self, bonsai_blank, train_dl, optimizer, criterion):
-        bonsai_blank.finetune(train_dl, optimizer, criterion, max_epochs=1)
+        model_optimizer = optimizer(bonsai_blank.model.parameters())
+        bonsai_blank.finetune(train_dl, model_optimizer, criterion, max_epochs=1)
 
 
 # download cifar10 val and test...
@@ -101,4 +102,5 @@ class TestFullPrune:
         cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
 
-        bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion)
+        bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
+                                iterations=9)

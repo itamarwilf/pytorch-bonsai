@@ -97,7 +97,10 @@ class AbstractBConv2d(BonsaiModule):
             return module_tensor
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        return initial_pruning_targets
+        if initial_pruning_targets:
+            return initial_pruning_targets
+        elif initial_pruning_targets is None:
+            return list(range(self.module_cfg["out_channels"]))
 
 
 class BConv2d(AbstractBConv2d):
@@ -211,7 +214,10 @@ class AbstractBDeconv2d(BonsaiModule):
         raise NotImplementedError
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        return initial_pruning_targets
+        if initial_pruning_targets:
+            return initial_pruning_targets
+        elif initial_pruning_targets is None:
+            return list(range(self.module_cfg["out_channels"]))
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
