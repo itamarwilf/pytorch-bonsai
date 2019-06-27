@@ -73,7 +73,7 @@ class AbstractPrunner:
                 data.append((i, j, rank))
         return nsmallest(num, data, itemgetter(2))
 
-    # TODO make sure filters are returned vectorized for slicing operations
+    # TODO - remove unwanted code and add documentation
     def get_prunning_plan(self, num_filters_to_prune):
         filters_to_prune = self.lowest_ranking_filters(num_filters_to_prune)
 

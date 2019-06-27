@@ -304,7 +304,7 @@ class BRoute(BonsaiModule):
     def prune_input(pruning_targets, module_name, module_tensor):
         pass
 
-    # TODO - access through layer index
+    # TODO - add more documentation
     def propagate_pruning_target(self, initial_pruning_targets=None):
         # get indices of layers to concat
         layer_indices = [len(self.bonsai_model.pruning_targets) - 1 - i for i in self.module_cfg["layers"]]

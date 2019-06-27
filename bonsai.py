@@ -55,6 +55,8 @@ class Bonsai:
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
 
+    # TODO - eval should be called at the end of each fine tuning epoch to log recovery
+    # TODO - eval should also return validation loss for early stopping of fine tuning
     def finetune(self, train_dl, optimizer, criterion, max_epochs=3):
         print("Recovery")
         self.model.to_rank = False
@@ -63,6 +65,7 @@ class Bonsai:
         finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, pbar)
         finetune_engine.run(train_dl, max_epochs=max_epochs)
 
+    # TODO - eval metrics should not be hardcoded, maybe pass metrics as a dict to eval
     def eval(self, eval_dl):
         print("Evaluation")
         val_evaluator = create_supervised_evaluator(self.model, metrics={"acc": Accuracy()}, device=self.device)
@@ -84,11 +87,10 @@ class Bonsai:
                     f.write('\n')
                 f.write('\n')
 
+    # TODO - add docstring
     def prune_model(self, num_filters_to_prune, iter_num):
         pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
         filters_to_keep = self.prunner.inverse_pruning_targets(pruning_targets)
-        # for k, v in filters_to_keep.items():
-        #     print(k, len(v))
         out_path = f"pruning_iteration_{iter_num}.cfg"
 
         self.write_pruned_recipe(out_path, filters_to_keep)
@@ -99,9 +101,6 @@ class Bonsai:
         self.model.cpu()
 
         final_pruning_targets = self.model.pruning_targets
-        # print("#####", len(final_pruning_targets))
-        # for v in final_pruning_targets:
-        #     print(len(v))
         for i, (old_module, new_module) in enumerate(zip(self.model.module_list, new_model.module_list)):
 
             pruned_state_dict = old_module.prune_weights(final_pruning_targets[i + 1], final_pruning_targets[i])
@@ -125,9 +124,7 @@ class Bonsai:
 
         num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
 
-
         for iteration in range(iterations):
-            print(f"######## {iteration} #########")
             # run ranking engine on val dataset
             self.rank(eval_dl, criterion)
 
@@ -232,6 +229,7 @@ class BonsaiModel(torch.nn.Module):
             module_list.append(module)
         return module_list
 
+    # - TODO - add docstring
     def total_prunable_filters(self):
         filters = 0
         for module in self.module_list:
@@ -239,6 +237,7 @@ class BonsaiModel(torch.nn.Module):
                 filters += int(module.module_cfg.get("out_channels"))
         return filters
 
+    # TODO - add docstring
     def propagate_pruning_targets(self, inital_pruning_targets):
 
         self.pruning_targets = [list(range(self.output_channels[0]))]
