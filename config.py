@@ -57,4 +57,4 @@ class Config(object):
         self.config[key].set(value)
 
 
-config = Config()
+# config = Config()
