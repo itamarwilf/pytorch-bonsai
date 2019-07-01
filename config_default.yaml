@@ -1,0 +1,20 @@
+
+pruning:
+  type: TaylorExpansionPrunner
+  num_iterations: 9
+  prune_percent: 0.1
+
+
+optimizer:
+  type: Adam
+  lr: 1e-5
+  momentum: 0.9
+
+
+criterion:
+  type: nll
+
+
+logging:
+  logdir: runs
+  train_log_interval: 1

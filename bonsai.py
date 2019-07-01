@@ -8,12 +8,14 @@ from ignite.engine import Events
 # from ignite.contrib.handlers.tqdm_logger import ProgressBar as Progbar
 from ignite.metrics import Accuracy
 from utils.progress_bar import Progbar
+from utils.engine_hooks import attach_eval_handlers, attach_train_handlers
 from modules.abstract_bonsai_classes import Prunable
 from modules.factories.bonsai_module_factory import BonsaiFactory
 from modules.model_cfg_parser import parse_model_cfg
 from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
     create_supervised_ranker
 from pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
+from torch.utils.tensorboard import SummaryWriter
 
 
 class Bonsai:
@@ -57,21 +59,28 @@ class Bonsai:
 
     # TODO - eval should be called at the end of each fine tuning epoch to log recovery
     # TODO - eval should also return validation loss for early stopping of fine tuning
-    def finetune(self, train_dl, optimizer, criterion, max_epochs=3):
+    def finetune(self, train_dl, optimizer, criterion, writer, max_epochs=3):
         print("Recovery")
         self.model.to_rank = False
         finetune_engine = create_supervised_trainer(self.model, optimizer, criterion, self.device)
         pbar = Progbar(train_dl, metrics='none')
         finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, pbar)
+        attach_train_handlers(trainer=finetune_engine, writer=writer)
         finetune_engine.run(train_dl, max_epochs=max_epochs)
 
     # TODO - eval metrics should not be hardcoded, maybe pass metrics as a dict to eval
-    def eval(self, eval_dl):
+    def eval(self, eval_dl, criterion, writer):
         print("Evaluation")
-        val_evaluator = create_supervised_evaluator(self.model, metrics={"acc": Accuracy()}, device=self.device)
+        val_evaluator = create_supervised_evaluator(self.model, criterion, device=self.device,
+                                                    metrics={"acc": Accuracy(output_transform=lambda output:
+                                                    (output[0], output[1]))})
+
         # TODO - add eval handlers and plotting
+        attach_eval_handlers(val_evaluator, writer=writer)
+
         pbar = Progbar(eval_dl, metrics='acc')
         val_evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
+
         val_evaluator.run(eval_dl, 1)
 
     def write_pruned_recipe(self, output_path, pruning_targets):
@@ -102,7 +111,6 @@ class Bonsai:
 
         final_pruning_targets = self.model.pruning_targets
         for i, (old_module, new_module) in enumerate(zip(self.model.module_list, new_model.module_list)):
-
             pruned_state_dict = old_module.prune_weights(final_pruning_targets[i + 1], final_pruning_targets[i])
             new_module.load_state_dict(pruned_state_dict)
 
@@ -116,7 +124,9 @@ class Bonsai:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
 
         # TODO - remove writer? replace with pickling or graph for pruning?
-        # writer = SummaryWriter()
+        print("AAA")
+        writer = SummaryWriter()
+        print("BBB")
 
         self.model.to(device)
 
@@ -132,22 +142,22 @@ class Bonsai:
             self.prune_model(num_filters_to_prune, iteration)
 
             # eval performance loss
-            self.eval(eval_dl)
+            self.eval(eval_dl, criterion, writer)
 
             # run training engine on train dataset (and log recovery using val dataset and engine)
             # TODO - move optimizer to bonsai class?
             model_optimizer = optimizer(self.model.parameters())
 
             # TODO - fix hardcoded recovery epochs
-            self.finetune(train_dl, model_optimizer, criterion)
+            self.finetune(train_dl, model_optimizer, criterion, writer)
 
 
 class BonsaiModel(torch.nn.Module):
-
     class _Mediator:
         """
         Used to mediate between Bonsai model and its modules, while avoiding circular referencing of torch.nn.Modules
         """
+
         def __init__(self, model=None):
             super().__init__()
             self.model = model

@@ -56,7 +56,7 @@ def create_supervised_trainer(model, optimizer, loss_fn,
     return Engine(_update)
 
 
-def create_supervised_evaluator(model, metrics={},
+def create_supervised_evaluator(model, loss_fn, metrics={},
                                 device=None, non_blocking=False,
                                 prepare_batch=_prepare_batch):
     """
@@ -86,7 +86,8 @@ def create_supervised_evaluator(model, metrics={},
             x, y = prepare_batch(batch, device=device, non_blocking=non_blocking)
             # TODO - the '[0]' is used for support of multiple network outputs, needs fixing of engine
             y_pred = model(x)[0]
-            return y_pred, y
+            loss = loss_fn(y_pred, y)
+            return y_pred, y, loss.item()
 
     engine = Engine(_inference)
 
