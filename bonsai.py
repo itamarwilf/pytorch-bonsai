@@ -124,9 +124,7 @@ class Bonsai:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
 
         # TODO - remove writer? replace with pickling or graph for pruning?
-        print("AAA")
         writer = SummaryWriter()
-        print("BBB")
 
         self.model.to(device)
 

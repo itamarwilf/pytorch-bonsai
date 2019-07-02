@@ -13,7 +13,7 @@ class Config(object):
     config = None
     """The confuse.Configuration object."""
 
-    def __init__(self, config_path="/home/itamar/Documents/pytorch-bonsai/config_default.yaml"):
+    def __init__(self, config_path="config_default.yaml"):
         if self.config is None:
             self.config = confuse.Configuration("BonsaiPruning", __name__)
             self.config.set_file(config_path)
@@ -57,4 +57,4 @@ class Config(object):
         self.config[key].set(value)
 
 
-# config = Config()
+config = Config()

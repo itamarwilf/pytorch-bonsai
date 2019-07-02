@@ -1,9 +1,7 @@
 from ignite.handlers import EarlyStopping, TerminateOnNan
 from ignite.engine import Engine, Events
 from torch.utils.tensorboard import SummaryWriter
-import config
-
-config.Config("../config_default.yaml")
+from config import config
 
 
 def attach_train_handlers(trainer: Engine, writer: SummaryWriter):
