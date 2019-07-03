@@ -23,6 +23,14 @@ def parse_model_cfg(path: str) -> List[dict]:
     return module_defs
 
 
+def validate_model_cfg(full_cfg: List[dict]) -> None:
+
+    hyperparmas = full_cfg.pop(0)
+
+    for module_cfg in full_cfg:
+        pass
+
+
 def write_pruned_model_cfg(mod_defs, pruning_targets, file_path: str):
     """
     write new model configuration file based on a built model configuration and pruning targets

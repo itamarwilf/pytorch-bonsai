@@ -41,8 +41,16 @@ class AbstractBConv2d(BonsaiModule):
             activation_creator = NonLinearFactory.get_creator(module_cfg['activation'])
             self.f = call_constructor_with_cfg(activation_creator, module_cfg)
 
-        # take input channels from prev layer
-        module_cfg['in_channels'] = bonsai_model.output_channels[-1]
+        # if 'in_channels' in module_cfg use it
+        # if it isn't, try to use out channels of prev layer if not None
+        # if None, raise error
+        if "in_channels" in module_cfg.keys():
+            pass
+        else:
+            prev_layer_output = bonsai_model.output_channels[-1]
+            if prev_layer_output is None:
+                raise ValueError
+            module_cfg['in_channels'] = bonsai_model.output_channels[-1]
         self.conv2d = call_constructor_with_cfg(nn.Conv2d, module_cfg)
         # pass output channels to next module using bonsai model
         bonsai_model.output_channels.append(module_cfg['out_channels'])
