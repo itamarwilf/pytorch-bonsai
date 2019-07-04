@@ -1,4 +1,5 @@
-from bonsai import BonsaiModel, Bonsai
+from bonsai import Bonsai
+from modules.bonsai_model import BonsaiModel
 import torch
 import pytest
 
