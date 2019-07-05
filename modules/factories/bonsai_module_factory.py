@@ -21,6 +21,10 @@ class BonsaiFactory:
             raise ValueError(f"{module_name} is an unrecognized module creator key")
         return creator
 
+    @classmethod
+    def get_all_creator_names(cls):
+        return list(BonsaiFactory._creators.keys())
+
 
 BonsaiFactory.register_new_creator('conv2d', BConv2d)
 BonsaiFactory.register_new_creator('prunable_conv2d', PBConv2d)

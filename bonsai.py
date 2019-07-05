@@ -115,7 +115,8 @@ class Bonsai:
 
         self.model.to(device)
 
-        assert (prune_percent * iterations < 1, "")
+        assert prune_percent * iterations < 1, f"prune_percent * iterations is bigger than entire model, " \
+            f"can't prune that much"
 
         num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
 

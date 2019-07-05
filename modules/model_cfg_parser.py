@@ -1,6 +1,7 @@
 from typing import List
 from modules.errors import ModuleConfigError
 
+
 GLOBAL_MODULE_CFGS = ["type", "name", "output"]
 
 
@@ -18,12 +19,44 @@ def basic_model_cfg_parsing(path: str) -> List[dict]:
     for line in lines:
         if line.startswith('['):  # This marks the start of a new block
             module_defs.append({})
-            module_defs[-1]['type'] = line[1:-1].rstrip()
+            module_defs[-1]['type'] = line[1:-1].replace(" ", "")
         else:
             key, value = line.split("=")
-            value = value.strip()
-            module_defs[-1][key.rstrip()] = value.strip()
+            value = value.replace(" ", "")
+            value = _convert_module_cfg_value(value)
+            module_defs[-1][key.replace(" ", "")] = value
     return module_defs
+
+
+def _convert_module_cfg_value(val: str):
+    """
+    change val into the correct data type
+    :param val: value to convert
+    :return: str, int, float, or a list containing these types
+    """
+    val = val.split(",")
+    try:
+        val = [int(x) for x in val]
+    except ValueError:
+        try:
+            val = [float(x) for x in val]
+        except ValueError:
+            pass
+    if len(val) == 1:
+        return val[0]
+    return val
+
+
+def _type_checks_config_values(module_cfg: dict):
+    for k, v in module_cfg:
+        if k in GLOBAL_MODULE_CFGS:
+            pass
+        elif k == "batch_normalize":
+            assert type(v) == int, f"{k} in config of {module_cfg['name']} is {v}, it should be an int"
+        elif k == "out_channels":
+            assert type(v) == int, f"{k} in config of {module_cfg['name']} is {v}, it should be an int"
+        elif k == "kernel_size":
+            pass
 
 
 # TODO - add more checks regarding linear layer
@@ -46,31 +79,6 @@ def validate_model_cfg(model_cfg: List[dict]) -> None:
                 raise ModuleConfigError("'conv2d' or similar layer after 'linear' or 'flatten' is not supported yet")
 
 
-def calc_receptive_field(model_cfg: List[dict]) -> None:
-
-    total_stride = 1
-
-    layer_sizes = []
-
-    for i, module_cfg in enumerate(model_cfg):
-        if module_cfg.get("type") in ["linear", "flatten", "pixel_shuffle"]:
-            print("Encountered layer for which receptive field cannot be calculated")
-            break
-
-        if module_cfg.get("type") == "route":
-            # rf = max([compute_rf(layer_sizes[:layer_idx]) for layer_idx in module_cfg.get("layers")])
-            pass
-
-        else:
-            stride = int(module_cfg.get("stride"))
-            total_stride *= stride
-            # TODO - calc receptive field for non square kernel sizes
-            kernel_size = int(module_cfg.get("kernel_size"))
-            layer_sizes.append((kernel_size, stride))
-            layer_rf = compute_rf(layer_sizes)
-            print(f"receptive field at layer #{i + 1} is {layer_rf}")
-
-
 def compute_layer_output_size(module_cfg, in_h, in_w):
     padding = module_cfg.get("padding", 0)
     kernel_size = module_cfg.get("kernel_size", 0)
@@ -78,29 +86,6 @@ def compute_layer_output_size(module_cfg, in_h, in_w):
     out_h = ((in_h + 2 * padding - kernel_size) // stride) + 1
     out_w = ((in_w + 2 * padding - kernel_size) // stride) + 1
     return out_h, out_w
-
-
-def compute_single_layer_rf(out, f, s):
-    """
-    compute receptive field of single layer
-    :param out: number of neurons in output
-    :param f: kernel size
-    :param s: stride
-    :return:
-    """
-    return s * (out - 1) + f
-
-
-def compute_rf(layers):
-    """
-
-    :param layers: list of tuples containing (kernel size, stride)
-    :return: receptive field of entire network
-    """
-    out = 1
-    for f, s in reversed(layers):
-        out = compute_single_layer_rf(out, f, s)
-    return out
 
 
 def write_pruned_model_cfg(mod_defs, pruning_targets, file_path: str):

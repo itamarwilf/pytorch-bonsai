@@ -1,5 +1,6 @@
 import pytest
-from modules.model_cfg_parser import basic_model_cfg_parsing, calc_receptive_field, validate_model_cfg
+from modules.model_cfg_parser import basic_model_cfg_parsing, validate_model_cfg
+from modules.receptive_field_calculation import calc_receptive_field
 from modules.errors import ModuleConfigError
 
 

@@ -18,8 +18,6 @@ def test_run_unet():
     assert model_output[0].size() == (1, 10)
 
 
-
-
 def test_module_list():
     cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
     model = Bonsai(cfg_path)

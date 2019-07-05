@@ -1,10 +1,10 @@
 import copy
 from collections import Counter
 from typing import List
-
+import numpy as np
 import torch
 from torch import nn
-
+from modules.errors import NotBonsaiModuleError
 from modules.abstract_bonsai_classes import Prunable
 from modules.factories.bonsai_module_factory import BonsaiFactory
 from modules.model_cfg_parser import basic_model_cfg_parsing
@@ -33,9 +33,7 @@ class BonsaiModel(torch.nn.Module):
 
         self._mediator = self._Mediator(self)
         self.output_channels: List[int] = []
-        self.feature_map_size: List[int] = []
-        self.kernel_sizes: List[int] = []
-        self.strides: List[int] = []
+        self.output_sizes: List = []
 
         self.layer_outputs: List[torch.Tensor] = []
         self.model_output = []
@@ -46,6 +44,7 @@ class BonsaiModel(torch.nn.Module):
         self.full_cfg = basic_model_cfg_parsing(cfg_path)  # type: List[dict]
         self.module_cfgs = copy.deepcopy(self.full_cfg)
         self.hyperparams = self.module_cfgs.pop(0)  # type: dict
+
         self.module_list = self._create_bonsai_modules()  # type: nn.ModuleList
 
     def __call__(self, *args, **kwargs):
@@ -96,6 +95,22 @@ class BonsaiModel(torch.nn.Module):
 
             module_list.append(module)
         return module_list
+
+    def _calc_layers_output_size(self):
+        in_h = self.hyperparams.get("height")
+        in_w = self.hyperparams.get("width")
+        in_c = self.hyperparams.get("in_channels")
+
+        for module_cfg in self.module_cfgs:
+            module_type = module_cfg["type"]
+            if module_type not in BonsaiFactory.get_all_creator_names():
+                raise NotBonsaiModuleError(f"{module_type} is an unrecognized Bonsai module, check spelling")
+            elif module_type == "linear":
+                self.output_sizes.append(int((module_cfg["out_features"])))
+            elif module_type == "flatten":
+                self.output_sizes.append(np.product(self.output_sizes[-1]))
+            elif module_type == "route":
+                pass
 
     # TODO - add docstring
     def total_prunable_filters(self):
