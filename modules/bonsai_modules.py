@@ -21,7 +21,13 @@ def call_constructor_with_cfg(constructor, cfg: dict):
     return constructor(**constructor_cfg)
 
 
-GLOBAL_MODULE_CFGS = ["type", "name", "output"]
+def conv_layer_output_size(module_cfg, in_h, in_w):
+    padding = module_cfg.get("padding", 0)
+    kernel_size = module_cfg.get("kernel_size", 0)
+    stride = module_cfg.get("stride", 1)
+    out_h = ((in_h + 2 * padding - kernel_size) // stride) + 1
+    out_w = ((in_w + 2 * padding - kernel_size) // stride) + 1
+    return out_h, out_w
 
 
 # region conv2d
@@ -56,6 +62,15 @@ class AbstractBConv2d(BonsaiModule):
 
     def forward(self, layer_input):
         raise NotImplementedError
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        out_c = self.module_cfg.get("out_channels")
+        if in_h is not None and in_w is not None:
+            out_h, out_w = conv_layer_output_size(self.module_cfg, in_h, in_w)
+            return out_c, out_h, out_w
+        else:
+            return out_c, None, None
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
@@ -143,6 +158,21 @@ class AbstractBDeconv2d(BonsaiModule):
     def forward(self, layer_input):
         raise NotImplementedError
 
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        out_c = self.module_cfg.get("out_channels")
+        stride = self.module_cfg.get("stride", 1)
+        padding = self.module_cfg.get("padding", 0)
+        kernel_size = self.module_cfg.get("kernel_size")
+        dilation = self.module_cfg.get("dilation", 1)
+        out_padding = self.module_cfg.get("out_padding", 0)
+        if in_h is not None and in_w is not None:
+            out_h = (in_h - 1) * stride - 2 * padding + dilation * (kernel_size - 1) + out_padding + 1
+            out_w = (in_w - 1) * stride - 2 * padding + dilation * (kernel_size - 1) + out_padding + 1
+            return out_c, out_h, out_w
+        else:
+            return out_c, None, None
+
     def propagate_pruning_target(self, initial_pruning_targets=None):
         if initial_pruning_targets:
             return initial_pruning_targets
@@ -213,6 +243,16 @@ class BRoute(BonsaiModule):
     def forward(self, layer_input):
         return torch.cat(tuple(self.bonsai_model.layer_outputs[i] for i in self.module_cfg["layers"]), dim=1)
 
+    def calc_layer_output_size(self, input_size):
+        prev_layers_output_sizes = [self.bonsai_model.output_sizes[i] for i in self.module_cfg["layers"]]
+        out_c = 0
+        out_h = None
+        out_w = None
+        for output_size in prev_layers_output_sizes:
+            layer_c, out_h, out_w = output_size
+            out_c += layer_c
+        return out_c, out_h, out_w
+
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
         pass
@@ -252,6 +292,20 @@ class BPixelShuffle(BonsaiModule):
     def forward(self, layer_input):
         return self.pixel_shuffle(layer_input)
 
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        up_factor = self.module_cfg.get("upscale_factor")
+        assert in_c % (up_factor ** 2) == 0, \
+            f"{self.module_cfg.get('name')} - upscale of {up_factor} isn't compatible with input size {input_size}"
+        out_c = in_c // (up_factor ** 2)
+        if in_h is not None and in_w is not None:
+            out_h = in_h * up_factor
+            out_w = in_w * up_factor
+        else:
+            out_h = None
+            out_w = None
+        return out_c, out_h, out_w
+
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
         pass
@@ -273,6 +327,14 @@ class BMaxPool2d(BonsaiModule):
     def forward(self, layer_input):
         return self.maxpool(layer_input)
 
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        if in_h is not None and in_w is not None:
+            out_h, out_w = conv_layer_output_size(self.module_cfg, in_h, in_w)
+            return in_c, out_h, out_w
+        else:
+            return in_c, None, None
+
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
         pass
@@ -292,6 +354,14 @@ class BAvgPool2d(BonsaiModule):
     def forward(self, layer_input):
         return self.avgpool2d(layer_input)
 
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        if in_h is not None and in_w is not None:
+            out_h, out_w = conv_layer_output_size(self.module_cfg, in_h, in_w)
+            return in_c, out_h, out_w
+        else:
+            return in_c, None, None
+
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
         pass
@@ -300,10 +370,14 @@ class BAvgPool2d(BonsaiModule):
         return self.bonsai_model.pruning_targets[-1]
 
 
-class BGlobalAvgPool(BonsaiModule):
+class BGlobalAvgPool2d(BonsaiModule):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super().__init__(bonsai_model, module_cfg)
+
+    def calc_layer_output_size(self, input_size):
+        in_c, _, _ = input_size
+        return in_c, 1, 1
 
     def forward(self, layer_input):
         torch.mean(layer_input, dim=(2, 3))
@@ -325,6 +399,10 @@ class BFlatten(BonsaiModule):
     def forward(self, layer_input):
         n,  _, _, _ = layer_input.size()
         return layer_input.view(n, -1)
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        return in_c * in_h * in_w
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):

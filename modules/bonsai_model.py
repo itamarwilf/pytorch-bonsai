@@ -71,7 +71,11 @@ class BonsaiModel(torch.nn.Module):
     def _create_bonsai_modules(self) -> nn.ModuleList:
         module_list = nn.ModuleList()
         # number of input channels for next layer is taken from prev layer output channels (or model input)
+        in_h = self.hyperparams.get("height")
+        in_w = self.hyperparams.get("width")
+        in_c = self.hyperparams.get("in_channels")
         self.output_channels.append(int(self.hyperparams['in_channels']))
+        self.output_sizes.append((in_c, in_h, in_w))
         counter = Counter()
         # iterate over module definitions to create and add modules to bonsai model
         for module_cfg in self.module_cfgs:
@@ -85,8 +89,7 @@ class BonsaiModel(torch.nn.Module):
             module_creator = BonsaiFactory.get_creator(module_type)
             # create the module using the creator and module cfg
             module = module_creator(self._mediator, module_cfg)
-            # TODO take parsed cfg from module and accumulate strides, kernels, and calc feature map stride if possible
-            # TODO have a list of layers that allow for receptive field calculations
+            self.output_sizes.append(module.calc_layer_output_size(self.output_sizes[-1]))
             # parsed_cfg = module.module_cfg
             # n_out = np.floor(n_in + 2 * padding - kernel_size / stride) -1 #activation map size
             # jump_out = jump_in * stride #jump in features (equivalent to the accumulated stride)
@@ -95,22 +98,6 @@ class BonsaiModel(torch.nn.Module):
 
             module_list.append(module)
         return module_list
-
-    def _calc_layers_output_size(self):
-        in_h = self.hyperparams.get("height")
-        in_w = self.hyperparams.get("width")
-        in_c = self.hyperparams.get("in_channels")
-
-        for module_cfg in self.module_cfgs:
-            module_type = module_cfg["type"]
-            if module_type not in BonsaiFactory.get_all_creator_names():
-                raise NotBonsaiModuleError(f"{module_type} is an unrecognized Bonsai module, check spelling")
-            elif module_type == "linear":
-                self.output_sizes.append(int((module_cfg["out_features"])))
-            elif module_type == "flatten":
-                self.output_sizes.append(np.product(self.output_sizes[-1]))
-            elif module_type == "route":
-                pass
 
     # TODO - add docstring
     def total_prunable_filters(self):

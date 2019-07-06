@@ -13,6 +13,9 @@ class BonsaiModule(nn.Module):
     def forward(self, layer_input):
         raise NotImplementedError
 
+    def calc_layer_output_size(self, input_size):
+        raise NotImplementedError
+
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
         raise NotImplementedError
@@ -43,6 +46,9 @@ class Prunable(BonsaiModule):
         self.ranking = torch.zeros(self.module_cfg["out_channels"])
 
     def forward(self, layer_input):
+        raise NotImplementedError
+
+    def calc_layer_output_size(self, input_size):
         raise NotImplementedError
 
     def get_weights(self) -> torch.Tensor:

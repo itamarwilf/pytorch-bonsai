@@ -47,18 +47,6 @@ def _convert_module_cfg_value(val: str):
     return val
 
 
-def _type_checks_config_values(module_cfg: dict):
-    for k, v in module_cfg:
-        if k in GLOBAL_MODULE_CFGS:
-            pass
-        elif k == "batch_normalize":
-            assert type(v) == int, f"{k} in config of {module_cfg['name']} is {v}, it should be an int"
-        elif k == "out_channels":
-            assert type(v) == int, f"{k} in config of {module_cfg['name']} is {v}, it should be an int"
-        elif k == "kernel_size":
-            pass
-
-
 # TODO - add more checks regarding linear layer
 def validate_model_cfg(model_cfg: List[dict]) -> None:
     hyper_params = model_cfg.pop(0)
@@ -77,15 +65,6 @@ def validate_model_cfg(model_cfg: List[dict]) -> None:
                 prev_linear = True
             elif module_cfg.get("type") not in ["linear", "flatten"] and prev_linear:
                 raise ModuleConfigError("'conv2d' or similar layer after 'linear' or 'flatten' is not supported yet")
-
-
-def compute_layer_output_size(module_cfg, in_h, in_w):
-    padding = module_cfg.get("padding", 0)
-    kernel_size = module_cfg.get("kernel_size", 0)
-    stride = module_cfg.get("stride", 1)
-    out_h = ((in_h + 2 * padding - kernel_size) // stride) + 1
-    out_w = ((in_w + 2 * padding - kernel_size) // stride) + 1
-    return out_h, out_w
 
 
 def write_pruned_model_cfg(mod_defs, pruning_targets, file_path: str):
