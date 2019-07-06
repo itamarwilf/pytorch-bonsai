@@ -28,7 +28,8 @@ class BonsaiModule(nn.Module):
         for module_name, module_tensor in weights.items():
             if isinstance(self, Prunable):
                 module_tensor = self.prune_output(output_pruning_targets, module_name, module_tensor)
-            module_tensor = self.prune_input(input_pruning_targets, module_name, module_tensor)
+            if input_pruning_targets:
+                module_tensor = self.prune_input(input_pruning_targets, module_name, module_tensor)
             weights[module_name] = module_tensor
         return weights
 
