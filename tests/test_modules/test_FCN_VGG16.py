@@ -1,4 +1,5 @@
-from bonsai import BonsaiModel, Bonsai
+from bonsai import Bonsai
+from modules.bonsai_model import BonsaiModel
 import torch
 import pytest
 
@@ -15,8 +16,6 @@ def test_run_unet():
     model_input = torch.rand(1, 3, 32, 32)
     model_output = model(model_input)
     assert model_output[0].size() == (1, 10)
-
-
 
 
 def test_module_list():

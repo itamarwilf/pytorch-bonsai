@@ -6,7 +6,6 @@ from inspect import getfullargspec
 
 from modules.abstract_bonsai_classes import BonsaiModule, Prunable
 from modules.factories.non_linear_factory import NonLinearFactory
-from modules.module_build_utils import parse_kernel_size
 
 
 def call_constructor_with_cfg(constructor, cfg: dict):
@@ -22,7 +21,13 @@ def call_constructor_with_cfg(constructor, cfg: dict):
     return constructor(**constructor_cfg)
 
 
-GLOBAL_MODULE_CFGS = ["type", "name", "output"]
+def conv_layer_output_size(module_cfg, in_h, in_w):
+    padding = module_cfg.get("padding", 0)
+    kernel_size = module_cfg.get("kernel_size", 0)
+    stride = module_cfg.get("stride", 1)
+    out_h = ((in_h + 2 * padding - kernel_size) // stride) + 1
+    out_w = ((in_w + 2 * padding - kernel_size) // stride) + 1
+    return out_h, out_w
 
 
 # region conv2d
@@ -37,57 +42,35 @@ class AbstractBConv2d(BonsaiModule):
             self.bn = nn.BatchNorm2d(module_cfg['out_channels'])
 
         self.f = None
-        if 'activation' in module_cfg and module_cfg['activation'] is not None:
+        if module_cfg.get('activation'):
             activation_creator = NonLinearFactory.get_creator(module_cfg['activation'])
             self.f = call_constructor_with_cfg(activation_creator, module_cfg)
 
-        # take input channels from prev layer
-        module_cfg['in_channels'] = bonsai_model.output_channels[-1]
+        # if 'in_channels' in module_cfg use it
+        # if it isn't, try to use out channels of prev layer if not None
+        # if None, raise error
+        if "in_channels" in module_cfg.keys():
+            pass
+        else:
+            prev_layer_output = bonsai_model.output_channels[-1]
+            if prev_layer_output is None:
+                raise ValueError
+            module_cfg['in_channels'] = bonsai_model.output_channels[-1]
         self.conv2d = call_constructor_with_cfg(nn.Conv2d, module_cfg)
         # pass output channels to next module using bonsai model
         bonsai_model.output_channels.append(module_cfg['out_channels'])
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        for k, v in module_cfg.items():
-            if k in GLOBAL_MODULE_CFGS:
-                pass
-            elif k == "batch_normalize":
-                try:
-                    new_v = int(v)
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-            elif k == "out_channels":
-                try:
-                    new_v = int(v)
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-            elif k == "kernel_size":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "stride":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "padding":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "activation":
-                if v == "none":
-                    module_cfg[k] = None
-            # TODO - separate activation parsing from module
-            elif k == "negative_slope":
-                try:
-                    new_v = float(v)
-                    assert 0 < new_v < 1, f"slope for leaky ReLU in {module_cfg['name']} is {new_v} while " \
-                        f"it should be 0 < slope < 1"
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-            else:
-                raise NotImplementedError(f"parsing of '{k}' for module '{module_cfg['type']}' is not implemented")
-        return module_cfg
-
     def forward(self, layer_input):
         raise NotImplementedError
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        out_c = self.module_cfg.get("out_channels")
+        if in_h is not None and in_w is not None:
+            out_h, out_w = conv_layer_output_size(self.module_cfg, in_h, in_w)
+            return out_c, out_h, out_w
+        else:
+            return out_c, None, None
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
@@ -172,46 +155,23 @@ class AbstractBDeconv2d(BonsaiModule):
         # pass output channels to next module using bonsai model
         bonsai_model.output_channels.append(module_cfg['out_channels'])
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        for k, v in module_cfg.items():
-            if k in GLOBAL_MODULE_CFGS:
-                pass
-            elif k == "batch_normalize":
-                try:
-                    new_v = int(v)
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-            elif k == "out_channels":
-                try:
-                    new_v = int(v)
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-            elif k == "kernel_size":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "stride":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "padding":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "activation":
-                if v == "none":
-                    module_cfg[k] = None
-            elif k == "negative_slope":
-                try:
-                    new_v = float(v)
-                    assert 0 < new_v < 1, f"slope for leaky ReLU in {module_cfg['name']} is {new_v} while " \
-                        f"it should be 0 < slope < 1"
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-            else:
-                raise NotImplementedError(f"parsing of {k} for module {module_cfg['type']} is not implemented")
-        return module_cfg
-
     def forward(self, layer_input):
         raise NotImplementedError
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        out_c = self.module_cfg.get("out_channels")
+        stride = self.module_cfg.get("stride", 1)
+        padding = self.module_cfg.get("padding", 0)
+        kernel_size = self.module_cfg.get("kernel_size")
+        dilation = self.module_cfg.get("dilation", 1)
+        out_padding = self.module_cfg.get("out_padding", 0)
+        if in_h is not None and in_w is not None:
+            out_h = (in_h - 1) * stride - 2 * padding + dilation * (kernel_size - 1) + out_padding + 1
+            out_w = (in_w - 1) * stride - 2 * padding + dilation * (kernel_size - 1) + out_padding + 1
+            return out_c, out_h, out_w
+        else:
+            return out_c, None, None
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
         if initial_pruning_targets:
@@ -268,7 +228,6 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
             return module_tensor[pruning_targets]
 
 
-
 # endregion
 
 
@@ -281,24 +240,18 @@ class BRoute(BonsaiModule):
         # pass output channels to next module using bonsai model
         bonsai_model.output_channels.append(out_channels)
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        for k, v in module_cfg.items():
-            if k in GLOBAL_MODULE_CFGS:
-                pass
-            elif k == "layers":
-                try:
-                    new_v = [int(x) for x in v.split(',')]
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} should be integers separated by commas,"
-                                     f"got {v}")
-            else:
-                raise NotImplementedError(f"parsing of {k} for module {module_cfg['type']} is not implemented")
-        return module_cfg
-
     def forward(self, layer_input):
         return torch.cat(tuple(self.bonsai_model.layer_outputs[i] for i in self.module_cfg["layers"]), dim=1)
+
+    def calc_layer_output_size(self, input_size):
+        prev_layers_output_sizes = [self.bonsai_model.output_sizes[i] for i in self.module_cfg["layers"]]
+        out_c = 0
+        out_h = None
+        out_w = None
+        for output_size in prev_layers_output_sizes:
+            layer_c, out_h, out_w = output_size
+            out_c += layer_c
+        return out_c, out_h, out_w
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
@@ -336,24 +289,22 @@ class BPixelShuffle(BonsaiModule):
         out_channels = bonsai_model.output_channels[-1] / (self.module_cfg["upscale_factor"] ** 2)
         bonsai_model.output_channels.append(out_channels)
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        for k, v in module_cfg.items():
-            if k in GLOBAL_MODULE_CFGS:
-                pass
-            elif k == "upscale_factor":
-                try:
-                    new_v = int(v)
-                    assert new_v > 0, f"upscale factor should be a positive integer, got {new_v}"
-                    module_cfg[k] = new_v
-                except ValueError:
-                    raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be a positive int")
-            else:
-                raise NotImplementedError(f"parsing of {k} for module {module_cfg['type']} is not implemented")
-        return module_cfg
-
     def forward(self, layer_input):
         return self.pixel_shuffle(layer_input)
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        up_factor = self.module_cfg.get("upscale_factor")
+        assert in_c % (up_factor ** 2) == 0, \
+            f"{self.module_cfg.get('name')} - upscale of {up_factor} isn't compatible with input size {input_size}"
+        out_c = in_c // (up_factor ** 2)
+        if in_h is not None and in_w is not None:
+            out_h = in_h * up_factor
+            out_w = in_w * up_factor
+        else:
+            out_h = None
+            out_w = None
+        return out_c, out_h, out_w
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
@@ -373,21 +324,16 @@ class BMaxPool2d(BonsaiModule):
         # since max pooling doesn't change the tensor's number of channels, re append previous output channels
         bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        for k, v in module_cfg.items():
-            if k in GLOBAL_MODULE_CFGS:
-                pass
-            elif k == "kernel_size":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "stride":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            else:
-                raise NotImplementedError(f"parsing of {k} for module {module_cfg['type']} is not implemented")
-        return module_cfg
-
     def forward(self, layer_input):
         return self.maxpool(layer_input)
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        if in_h is not None and in_w is not None:
+            out_h, out_w = conv_layer_output_size(self.module_cfg, in_h, in_w)
+            return in_c, out_h, out_w
+        else:
+            return in_c, None, None
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
@@ -405,21 +351,16 @@ class BAvgPool2d(BonsaiModule):
         # since max pooling doesn't change the tensor's number of channels, re append previous output channels
         bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        for k, v in module_cfg.items():
-            if k in GLOBAL_MODULE_CFGS:
-                pass
-            elif k == "kernel_size":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            elif k == "stride":
-                module_cfg = parse_kernel_size(module_cfg, k, v)
-            else:
-                raise NotImplementedError(f"parsing of {k} for module {module_cfg['type']} is not implemented")
-        return module_cfg
-
     def forward(self, layer_input):
         return self.avgpool2d(layer_input)
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        if in_h is not None and in_w is not None:
+            out_h, out_w = conv_layer_output_size(self.module_cfg, in_h, in_w)
+            return in_c, out_h, out_w
+        else:
+            return in_c, None, None
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
@@ -429,14 +370,14 @@ class BAvgPool2d(BonsaiModule):
         return self.bonsai_model.pruning_targets[-1]
 
 
-class BGlobalAvgPool(BonsaiModule):
+class BGlobalAvgPool2d(BonsaiModule):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super().__init__(bonsai_model, module_cfg)
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        pass
+    def calc_layer_output_size(self, input_size):
+        in_c, _, _ = input_size
+        return in_c, 1, 1
 
     def forward(self, layer_input):
         torch.mean(layer_input, dim=(2, 3))
@@ -455,13 +396,13 @@ class BFlatten(BonsaiModule):
         super(BFlatten, self).__init__(bonsai_model, module_cfg)
         bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        return module_cfg
-
     def forward(self, layer_input):
         n,  _, _, _ = layer_input.size()
         return layer_input.view(n, -1)
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        return in_c * in_h * in_w
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):

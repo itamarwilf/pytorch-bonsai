@@ -1,7 +1,11 @@
 from typing import List
+from modules.errors import ModuleConfigError
 
 
-def parse_model_cfg(path: str) -> List[dict]:
+GLOBAL_MODULE_CFGS = ["type", "name", "output"]
+
+
+def basic_model_cfg_parsing(path: str) -> List[dict]:
     """
     Parses the model configuration file and returns module definitions
     :param path: path to model cfg file
@@ -15,12 +19,52 @@ def parse_model_cfg(path: str) -> List[dict]:
     for line in lines:
         if line.startswith('['):  # This marks the start of a new block
             module_defs.append({})
-            module_defs[-1]['type'] = line[1:-1].rstrip()
+            module_defs[-1]['type'] = line[1:-1].replace(" ", "")
         else:
             key, value = line.split("=")
-            value = value.strip()
-            module_defs[-1][key.rstrip()] = value.strip()
+            value = value.replace(" ", "")
+            value = _convert_module_cfg_value(value)
+            module_defs[-1][key.replace(" ", "")] = value
     return module_defs
+
+
+def _convert_module_cfg_value(val: str):
+    """
+    change val into the correct data type
+    :param val: value to convert
+    :return: str, int, float, or a list containing these types
+    """
+    val = val.split(",")
+    try:
+        val = [int(x) for x in val]
+    except ValueError:
+        try:
+            val = [float(x) for x in val]
+        except ValueError:
+            pass
+    if len(val) == 1:
+        return val[0]
+    return val
+
+
+# TODO - add more checks regarding linear layer
+def validate_model_cfg(model_cfg: List[dict]) -> None:
+    hyper_params = model_cfg.pop(0)
+
+    height = hyper_params.get("height")
+    width = hyper_params.get("width")
+    in_channels = hyper_params.get("in_channels")
+
+    if any([module_cfg.get("type") in ["linear", "flatten"] for module_cfg in model_cfg]):
+        if not all([height, width, in_channels]):
+            raise ModuleConfigError("model has 'linear' or 'flatten' layer but initial input size isn't specified")
+
+        prev_linear = False
+        for module_cfg in model_cfg:
+            if module_cfg.get("type") in ["linear", "flatten"]:
+                prev_linear = True
+            elif module_cfg.get("type") not in ["linear", "flatten"] and prev_linear:
+                raise ModuleConfigError("'conv2d' or similar layer after 'linear' or 'flatten' is not supported yet")
 
 
 def write_pruned_model_cfg(mod_defs, pruning_targets, file_path: str):

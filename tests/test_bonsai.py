@@ -5,9 +5,10 @@ from torchvision.datasets import CIFAR10
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader, sampler
 import pytest
+import os
 
-NUM_TRAIN = 2000
-NUM_VAL = 1000
+NUM_TRAIN = 256
+NUM_VAL = 128
 
 
 @pytest.fixture()
@@ -87,12 +88,12 @@ class TestBonsaiRank:
 
 class TestWriteRecipe:
 
-    def test_write_recipe(self, val_dl):
+    def test_write_recipe(self, val_dl, tmpdir):
         cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
         bonsai.rank(val_dl, None)
         init_pruning_targets = bonsai.prunner.get_prunning_plan(99)
-        bonsai.write_pruned_recipe("testing.cfg", init_pruning_targets)
+        bonsai.write_pruned_recipe(os.path.join(tmpdir, "testing.cfg"), init_pruning_targets)
         print("well")
 
 
