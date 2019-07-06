@@ -411,57 +411,65 @@ class BFlatten(BonsaiModule):
     def propagate_pruning_target(self, initial_pruning_targets=None):
         pass
 
-# TODO linear layer needs more complicated implementaion
-# class BLinear(BonsaiModule):
-#
-#     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
-#         super().__init__(bonsai_model, module_cfg)
-#         self.linear = call_constructor_with_cfg(nn.Linear, self.module_cfg)
-#         bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
-#
-#     @staticmethod
-#     def _parse_module_cfg(module_cfg: dict) -> dict:
-#         for k, v in module_cfg.items():
-#             if k in GLOBAL_MODULE_CFGS:
-#                 pass
-#             elif k == "batch_normalize":
-#                 try:
-#                     new_v = int(v)
-#                     module_cfg[k] = new_v
-#                 except ValueError:
-#                     raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-#             elif k == "out_features":
-#                 try:
-#                     new_v = int(v)
-#                     module_cfg[k] = new_v
-#                 except ValueError:
-#                     raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-#
-#             # TODO change cfg key to correct name for specific constructor, maybe should be done in bonsai_model method
-#             elif k == "in_channels":
-#                 module_cfg["in_features"] = parse_kernel_size(module_cfg, k, v)
-#             elif k == "bias":
-#                 try:
-#                     new_v = int(v)
-#                     assert 0 <= new_v <= 1, f"{k} in config of {module_cfg['name']} is {v}, should be an int of 0 or 1"
-#                     module_cfg[k] = new_v
-#                 except ValueError:
-#                     raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, should be an int of 0 or 1")
-#             elif k == "activation":
-#                 if v == "none":
-#                     module_cfg[k] = None
-#             # TODO - separate activation parsing from module
-#             elif k == "negative_slope":
-#                 try:
-#                     new_v = float(v)
-#                     assert 0 < new_v < 1, f"slope for leaky ReLU in {module_cfg['name']} is {new_v} while " \
-#                         f"it should be 0 < slope < 1"
-#                     module_cfg[k] = new_v
-#                 except ValueError:
-#                     raise ValueError(f"{k} in config of {module_cfg['name']} is {v}, it should be an int")
-#             else:
-#                 raise NotImplementedError(f"parsing of '{k}' for module '{module_cfg['type']}' is not implemented")
-#         return module_cfg
-#
-#     def forward(self, layer_input):
-#         return self.linear(layer_input)
+
+class BLinear(BonsaiModule):
+
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+        super().__init__(bonsai_model, module_cfg)
+
+        self.bn = None
+        if 'batch_normalize' in module_cfg and module_cfg['batch_normalize']:
+            self.bn = nn.BatchNorm1d(module_cfg['out_features'])
+
+        self.f = None
+        if module_cfg.get('activation'):
+            activation_creator = NonLinearFactory.get_creator(module_cfg['activation'])
+            self.f = call_constructor_with_cfg(activation_creator, module_cfg)
+
+        # if 'in_features' in module_cfg use it
+        # if it isn't, try to use out size of prev layer if not None
+        # if None, raise error
+        if "in_features" in module_cfg.keys():
+            pass
+        else:
+            prev_layer_output = bonsai_model.output_sizes[-1]
+            if prev_layer_output is None:
+                raise ValueError
+            module_cfg['in_features'] = prev_layer_output
+
+        self.linear = call_constructor_with_cfg(nn.Linear, self.module_cfg)
+        bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
+
+    def calc_layer_output_size(self, input_size):
+        return self.module_cfg.get("out_features")
+
+    def forward(self, layer_input):
+        return self.linear(layer_input)
+
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        pass
+
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        pass
+
+
+class BDropout(BonsaiModule):
+
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+        super().__init__(bonsai_model, module_cfg)
+        self.dropout = call_constructor_with_cfg(nn.Dropout, module_cfg)
+        bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
+
+    def forward(self, layer_input):
+        return self.dropout(layer_input)
+
+    def calc_layer_output_size(self, input_size):
+        return input_size
+
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        pass
+
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        return self.bonsai_model.pruning_targets[-1]
