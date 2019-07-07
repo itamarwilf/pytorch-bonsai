@@ -1,7 +1,7 @@
 import copy
+import weakref
 from collections import Counter
 from typing import List
-import numpy as np
 import torch
 from torch import nn
 from modules.errors import NotBonsaiModuleError
@@ -12,26 +12,11 @@ from modules.model_cfg_parser import basic_model_cfg_parsing
 
 class BonsaiModel(torch.nn.Module):
 
-    class _Mediator:
-        """
-        Used to mediate between Bonsai model and its modules, while avoiding circular referencing of torch.nn.Modules
-        """
-        def __init__(self, model=None):
-            super().__init__()
-            self.model = model
-
-        def __getattribute__(self, item):
-            try:
-                return super().__getattribute__(item)
-            except AttributeError:
-                return self.model.__getattribute__(item)
-
     def __init__(self, cfg_path, bonsai):
         super(BonsaiModel, self).__init__()
-        self.bonsai = bonsai
+        self.bonsai = weakref.ref(bonsai)
         self.device = None
 
-        self._mediator = self._Mediator(self)
         self.output_channels: List[int] = []
         self.output_sizes: List = []
 
@@ -50,6 +35,9 @@ class BonsaiModel(torch.nn.Module):
     def __call__(self, *args, **kwargs):
         return super().__call__(*args, **kwargs)
 
+    def get_bonsai(self):
+        return self.bonsai()
+
     def _reset_forward(self):
 
         self.model_output = []
@@ -65,7 +53,9 @@ class BonsaiModel(torch.nn.Module):
             if module.module_cfg.get("output"):
                 self.model_output.append(x)
 
-        return self.model_output
+        output = self.model_output
+        self._reset_forward()
+        return output
 
     # TODO needs design for nn.Linear construction, including feature map size, strides, kernel sizes, etc.
     def _create_bonsai_modules(self) -> nn.ModuleList:
@@ -88,13 +78,8 @@ class BonsaiModel(torch.nn.Module):
             # get the module creator based on type
             module_creator = BonsaiFactory.get_creator(module_type)
             # create the module using the creator and module cfg
-            module = module_creator(self._mediator, module_cfg)
+            module = module_creator(self, module_cfg)
             self.output_sizes.append(module.calc_layer_output_size(self.output_sizes[-1]))
-            # parsed_cfg = module.module_cfg
-            # n_out = np.floor(n_in + 2 * padding - kernel_size / stride) -1 #activation map size
-            # jump_out = jump_in * stride #jump in features (equivalent to the accumulated stride)
-            # r_out = r_in + (kernel_size-1) * j_in
-            # start_out = start_in + ( (kernel_size - 1) / 2 - p) * j_in # note: can be discarded
 
             module_list.append(module)
         return module_list

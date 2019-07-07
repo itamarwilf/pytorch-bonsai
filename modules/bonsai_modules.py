@@ -113,8 +113,8 @@ class PBConv2d(AbstractBConv2d, Prunable):
     def forward(self, layer_input):
         x = self.conv2d(layer_input)
 
-        if self.bonsai_model.to_rank:
-            self.bonsai_model.bonsai.prunner.attach_hooks_for_rank_calculation(self, x)
+        if self.get_model().to_rank:
+            self.get_model().get_bonsai().prunner.attach_hooks_for_rank_calculation(self, x)
 
         if self.f is not None:
             x = self.f(x)
@@ -208,8 +208,8 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
     def forward(self, layer_input):
         x = self.deconv2d(layer_input)
 
-        if self.bonsai_model.to_rank:
-            self.bonsai_model.bonsai.prunner.attach_hooks_for_rank_calculation(self, x)
+        if self.get_model().to_rank:
+            self.get_model().bonsai.prunner.attach_hooks_for_rank_calculation(self, x)
 
         if self.bn is not None:
             x = self.bn(x)
@@ -241,10 +241,10 @@ class BRoute(BonsaiModule):
         bonsai_model.output_channels.append(out_channels)
 
     def forward(self, layer_input):
-        return torch.cat(tuple(self.bonsai_model.layer_outputs[i] for i in self.module_cfg["layers"]), dim=1)
+        return torch.cat(tuple(self.get_model().layer_outputs[i] for i in self.module_cfg["layers"]), dim=1)
 
     def calc_layer_output_size(self, input_size):
-        prev_layers_output_sizes = [self.bonsai_model.output_sizes[i] for i in self.module_cfg["layers"]]
+        prev_layers_output_sizes = [self.get_model().output_sizes[i] for i in self.module_cfg["layers"]]
         out_c = 0
         out_h = None
         out_w = None
@@ -260,18 +260,18 @@ class BRoute(BonsaiModule):
     # TODO - add more documentation
     def propagate_pruning_target(self, initial_pruning_targets=None):
         # get indices of layers to concat
-        layer_indices = [len(self.bonsai_model.pruning_targets) - 1 - i for i in self.module_cfg["layers"]]
+        layer_indices = [len(self.get_model().pruning_targets) - 1 - i for i in self.module_cfg["layers"]]
         # reset desired output and index buffer
         result = []
         buffer = 0
         # iterate over concatenated layers
         for layer_idx in layer_indices:
             # get module whose output is concatenated
-            module = self.bonsai_model.module_list[layer_idx]
+            module = self.get_model().module_list[layer_idx]
             module_out_channels = module.module_cfg["out_channels"]
 
             if layer_idx in self.keys():
-                module_pruning_targets = self.bonsai_model.pruning_targets[layer_idx]
+                module_pruning_targets = self.get_model().pruning_targets[layer_idx]
             else:
                 module_pruning_targets = list(range(module_out_channels))
             module_pruning_targets = [x + buffer for x in module_pruning_targets]
@@ -312,8 +312,8 @@ class BPixelShuffle(BonsaiModule):
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
         pass
-        # prev_targets = self.bonsai_model.pruning_targets[-1]
-        # self.bonsai_model.pruning_targets.append(prev_targets)
+        # prev_targets = self.get_model.pruning_targets[-1]
+        # self.get_model.pruning_targets.append(prev_targets)
 
 
 class BMaxPool2d(BonsaiModule):
@@ -340,7 +340,7 @@ class BMaxPool2d(BonsaiModule):
         pass
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        return self.bonsai_model.pruning_targets[-1]
+        return self.get_model().pruning_targets[-1]
 
 
 class BAvgPool2d(BonsaiModule):
@@ -367,7 +367,7 @@ class BAvgPool2d(BonsaiModule):
         pass
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        return self.bonsai_model.pruning_targets[-1]
+        return self.get_model().pruning_targets[-1]
 
 
 class BGlobalAvgPool2d(BonsaiModule):
@@ -387,7 +387,7 @@ class BGlobalAvgPool2d(BonsaiModule):
         pass
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        return self.bonsai_model.pruning_targets[-1]
+        return self.get_model().pruning_targets[-1]
 
 
 class BFlatten(BonsaiModule):
@@ -472,4 +472,4 @@ class BDropout(BonsaiModule):
         pass
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        return self.bonsai_model.pruning_targets[-1]
+        return self.get_model().pruning_targets[-1]

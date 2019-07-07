@@ -1,14 +1,18 @@
 from typing import Dict, Any
 import torch
 from torch import nn
+import weakref
 
 
 class BonsaiModule(nn.Module):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super(BonsaiModule, self).__init__()
-        self.bonsai_model = bonsai_model
+        self.bonsai_model = weakref.ref(bonsai_model)
         self.module_cfg = module_cfg
+
+    def get_model(self):
+        return self.bonsai_model()
 
     def forward(self, layer_input):
         raise NotImplementedError
@@ -49,6 +53,12 @@ class Prunable(BonsaiModule):
     def forward(self, layer_input):
         raise NotImplementedError
 
+    def reset(self):
+        self.weights = None
+        self.activation = None
+        self.grad = None
+        self.ranking = torch.zeros(self.module_cfg["out_channels"])
+
     def calc_layer_output_size(self, input_size):
         raise NotImplementedError
 
@@ -63,9 +73,6 @@ class Prunable(BonsaiModule):
     @staticmethod
     def prune_output(pruning_targets, module_name, module_tensor):
         raise NotImplementedError
-
-    def reset(self):
-        self.ranking = torch.zeros(self.module_cfg["out_channels"])
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
         raise NotImplementedError
