@@ -102,14 +102,14 @@ class TestFullPrune:
 
     def test_run_pruning_fcn_vgg16(self, train_dl, val_dl, test_dl, criterion, optimizer):
         cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
-        bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
+        bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
 
         bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
                                 iterations=9)
 
     def test_run_pruning_vgg19(self, train_dl, val_dl, test_dl, criterion, optimizer):
         cfg_path = "example_models_for tests/configs/VGG19.cfg"
-        bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
+        bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
         bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
         bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
                                 iterations=9)
