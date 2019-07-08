@@ -5,6 +5,8 @@ from torchvision.datasets import CIFAR10
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader, sampler
 import torch
+from modules.bonsai_parser import model_to_cfg_w_routing
+from u_net import UNet
 import pytest
 import os
 
@@ -113,3 +115,16 @@ class TestFullPrune:
         bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
         bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
                                 iterations=9)
+
+
+class TestConfigurationFileParser:
+
+    def test_file_parsing(self, train_dl, val_dl, test_dl, criterion, optimizer):
+        if __name__ == '__main__':
+            u_in = torch.randn(1, 4, 128, 128)
+            u_net = UNet(4, 4)
+            u_out = u_net(u_in)
+
+            cfg_mem = model_to_cfg_w_routing(u_net, u_in.size(), u_out)
+            cfg_mem.summary()  # prints model cfg summary
+            cfg_mem.save_cfg('../example_models/configs/unet_from_pytorch.cfg')
