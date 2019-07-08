@@ -3,7 +3,6 @@ import numpy as np
 from ignite.engine import Events
 # from ignite.contrib.handlers.tqdm_logger import ProgressBar as Progbar
 from ignite.metrics import Accuracy
-
 from modules.bonsai_model import BonsaiModel
 from utils.progress_bar import Progbar
 from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
@@ -22,10 +21,10 @@ class Bonsai:
 
     """
 
-    def __init__(self, model_cfg_path: str, prunner=None, normalize=False):
+    def __init__(self, model_cfg_path: str, prunner = None, normalize=False):
         self.model = BonsaiModel(model_cfg_path, self)
         if prunner is not None and isinstance(prunner(self), AbstractPrunner):
-            self.prunner = prunner(self, normalize=normalize)
+            self.prunner = prunner(self, normalize=normalize)  # type: AbstractPrunner
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -101,7 +100,7 @@ class Bonsai:
             pruned_state_dict = old_module.prune_weights(final_pruning_targets[i + 1], final_pruning_targets[i])
             new_module.load_state_dict(pruned_state_dict)
 
-        del self.model
+        self.prunner.reset()
         self.model = new_model
 
     def run_pruning_loop(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9,
@@ -112,8 +111,6 @@ class Bonsai:
 
         # TODO - remove writer? replace with pickling or graph for pruning?
         # writer = SummaryWriter()
-
-        self.model.to(device)
 
         assert prune_percent * iterations < 1, f"prune_percent * iterations is bigger than entire model, " \
             f"can't prune that much"

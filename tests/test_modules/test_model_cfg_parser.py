@@ -6,7 +6,7 @@ from modules.errors import ModuleConfigError
 
 @pytest.fixture()
 def unet_cfg():
-    unet_cfg = basic_model_cfg_parsing("model_cfgs_for_tests/U-NET.cfg")
+    unet_cfg = basic_model_cfg_parsing("example_models_for tests/configs/U-NET.cfg")
     yield unet_cfg
 
 
@@ -16,7 +16,7 @@ def test_unet_receptive_field(unet_cfg):
 
 @pytest.fixture()
 def fcn_vgg16_cfg():
-    fcn_vgg16_cfg = basic_model_cfg_parsing("model_cfgs_for_tests/FCN-VGG16.cfg")
+    fcn_vgg16_cfg = basic_model_cfg_parsing("example_models_for tests/configs/FCN-VGG16.cfg")
     yield fcn_vgg16_cfg
 
 
@@ -26,7 +26,7 @@ def test_fcn_vgg16_receptive_field(fcn_vgg16_cfg):
 
 @pytest.fixture()
 def bad_config_1():
-    bad_config1 = basic_model_cfg_parsing("model_cfgs_for_tests/bad_config1.cfg")
+    bad_config1 = basic_model_cfg_parsing("example_models_for tests/configs/bad_config1.cfg")
     yield bad_config1
 
 
@@ -37,7 +37,7 @@ def test_linear_without_input_size(bad_config_1):
 
 @pytest.fixture()
 def bad_config_2():
-    bad_config2 = basic_model_cfg_parsing("model_cfgs_for_tests/bad_config2.cfg")
+    bad_config2 = basic_model_cfg_parsing("example_models_for tests/configs/bad_config2.cfg")
     yield bad_config2
 
 

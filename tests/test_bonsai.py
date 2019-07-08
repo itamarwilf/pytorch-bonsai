@@ -35,7 +35,7 @@ def test_dl():
 
 @pytest.fixture()
 def bonsai_blank():
-    cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+    cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
     bonsai = Bonsai(cfg_path)
     yield bonsai
 
@@ -52,17 +52,17 @@ def criterion():
 
 
 def test_build_bonsai_with_no_prunner():
-    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
+    cfg_path = "example_models_for tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path)
 
 
 def test_build_bonsai_with_weight_prunner():
-    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
+    cfg_path = "example_models_for tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path, WeightL2Prunner)
 
 
 def test_bonsai_rank_method_with_weight_prunner():
-    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
+    cfg_path = "example_models_for tests/configs/U-NET.cfg"
     bonsai = Bonsai(cfg_path, WeightL2Prunner)
     bonsai.rank(None, None)
 
@@ -78,12 +78,12 @@ class TestBonsaiFinetune:
 class TestBonsaiRank:
 
     def test_bonsai_rank_method_with_activation_prunner(self, val_dl, criterion):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, ActivationL2Prunner)
         bonsai.rank(val_dl, criterion)
 
     def test_bonsai_rank_method_with_gradient_prunner(self, val_dl, criterion):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
         bonsai.rank(val_dl, criterion)
         print("well")
@@ -92,7 +92,7 @@ class TestBonsaiRank:
 class TestWriteRecipe:
 
     def test_write_recipe(self, val_dl, tmpdir):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
         bonsai.rank(val_dl, None)
         init_pruning_targets = bonsai.prunner.get_prunning_plan(99)
@@ -102,10 +102,17 @@ class TestWriteRecipe:
 
 class TestFullPrune:
 
-    def test_run_pruning(self, train_dl, val_dl, test_dl, criterion, optimizer):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+    def test_run_pruning_fcn_vgg16(self, train_dl, val_dl, test_dl, criterion, optimizer):
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
 
+        bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
+                                iterations=9)
+
+    def test_run_pruning_vgg19(self, train_dl, val_dl, test_dl, criterion, optimizer):
+        cfg_path = "example_models_for tests/configs/VGG19.cfg"
+        bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
+        bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
         bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
                                 iterations=9)
 
