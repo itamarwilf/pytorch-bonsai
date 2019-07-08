@@ -1,5 +1,5 @@
 import torch
-import numpy as np
+import weakref
 from operator import itemgetter
 from heapq import nsmallest
 from modules.abstract_bonsai_classes import Prunable
@@ -8,14 +8,17 @@ from modules.abstract_bonsai_classes import Prunable
 class AbstractPrunner:
 
     def __init__(self, bonsai, normalize=False):
-        self.bonsai = bonsai
+        self.bonsai = weakref.ref(bonsai)
         self.normalize = normalize
+
+    def get_bonsai(self):
+        return self.bonsai()
 
     def prunable_modules_iterator(self):
         """
         :return: iterator over module list filtered for prunable modules. holds tuples of (module index, module)
         """
-        enumerator = enumerate(self.bonsai.model.module_list)
+        enumerator = enumerate(self.get_bonsai().model.module_list)
         return filter(lambda x: isinstance(x[1], Prunable), enumerator)
 
     def set_up(self):
@@ -62,10 +65,6 @@ class AbstractPrunner:
         for _, module in self.prunable_modules_iterator():
             self.normalize_filter_ranks_per_layer(module)
 
-    def reset_ranks(self):
-        for _, module in self.prunable_modules_iterator():
-            module.reset()
-
     def lowest_ranking_filters(self, num):
         data = []
         for i, module in self.prunable_modules_iterator():
@@ -87,13 +86,6 @@ class AbstractPrunner:
 
         for l in filters_to_prune_per_layer:
             filters_to_prune_per_layer[l] = sorted(filters_to_prune_per_layer[l])
-        #     for i in range(len(filters_to_prune_per_layer[l])):
-        #         filters_to_prune_per_layer[l][i] = filters_to_prune_per_layer[l][i] - i
-        #
-        # filters_to_prune = []
-        # for l in filters_to_prune_per_layer:
-        #     for i in filters_to_prune_per_layer[l]:
-        #         filters_to_prune.append((l, i))
 
         return filters_to_prune_per_layer
 

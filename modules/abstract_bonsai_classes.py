@@ -1,20 +1,23 @@
 from typing import Dict, Any
 import torch
 from torch import nn
+import weakref
 
 
 class BonsaiModule(nn.Module):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super(BonsaiModule, self).__init__()
-        self.bonsai_model = bonsai_model
-        self.module_cfg = self._parse_module_cfg(module_cfg)
+        self.bonsai_model = weakref.ref(bonsai_model)
+        self.module_cfg = module_cfg
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        raise NotImplementedError
+    def get_model(self):
+        return self.bonsai_model()
 
     def forward(self, layer_input):
+        raise NotImplementedError
+
+    def calc_layer_output_size(self, input_size):
         raise NotImplementedError
 
     @staticmethod
@@ -29,7 +32,8 @@ class BonsaiModule(nn.Module):
         for module_name, module_tensor in weights.items():
             if isinstance(self, Prunable):
                 module_tensor = self.prune_output(output_pruning_targets, module_name, module_tensor)
-            module_tensor = self.prune_input(input_pruning_targets, module_name, module_tensor)
+            if input_pruning_targets:
+                module_tensor = self.prune_input(input_pruning_targets, module_name, module_tensor)
             weights[module_name] = module_tensor
         return weights
 
@@ -46,11 +50,16 @@ class Prunable(BonsaiModule):
         self.grad = None
         self.ranking = torch.zeros(self.module_cfg["out_channels"])
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
+    def forward(self, layer_input):
         raise NotImplementedError
 
-    def forward(self, layer_input):
+    def reset(self):
+        self.weights = None
+        self.activation = None
+        self.grad = None
+        self.ranking = torch.zeros(self.module_cfg["out_channels"])
+
+    def calc_layer_output_size(self, input_size):
         raise NotImplementedError
 
     def get_weights(self) -> torch.Tensor:
@@ -64,9 +73,6 @@ class Prunable(BonsaiModule):
     @staticmethod
     def prune_output(pruning_targets, module_name, module_tensor):
         raise NotImplementedError
-
-    def reset(self):
-        self.ranking = torch.zeros(self.module_cfg["out_channels"])
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
         raise NotImplementedError

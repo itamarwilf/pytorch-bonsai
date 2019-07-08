@@ -21,7 +21,12 @@ class BonsaiFactory:
             raise ValueError(f"{module_name} is an unrecognized module creator key")
         return creator
 
+    @classmethod
+    def get_all_creator_names(cls):
+        return list(BonsaiFactory._creators.keys())
 
+
+# TODO - change to iterator going over BonsaiModule children who ar not abstract in modules.bonsai_modules
 BonsaiFactory.register_new_creator('conv2d', BConv2d)
 BonsaiFactory.register_new_creator('prunable_conv2d', PBConv2d)
 BonsaiFactory.register_new_creator('deconv2d', BDeconv2d)
@@ -30,3 +35,5 @@ BonsaiFactory.register_new_creator('route', BRoute)
 BonsaiFactory.register_new_creator('maxpool', BMaxPool2d)
 BonsaiFactory.register_new_creator('pixel_shuffle', BPixelShuffle)
 BonsaiFactory.register_new_creator('flatten', BFlatten)
+BonsaiFactory.register_new_creator('linear', BLinear)
+BonsaiFactory.register_new_creator('dropout', BDropout)

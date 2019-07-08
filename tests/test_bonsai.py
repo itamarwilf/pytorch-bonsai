@@ -4,10 +4,16 @@ from pruning.bonsai_prunners import WeightL2Prunner, ActivationL2Prunner, Taylor
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader, sampler
+from torch.utils.tensorboard import SummaryWriter
+import torch
+from modules.bonsai_parser import model_to_cfg_w_routing
+from modules.model_cfg_parser import write_pruned_config
+from u_net import UNet
 import pytest
+import os
 
-NUM_TRAIN = 2000
-NUM_VAL = 1000
+NUM_TRAIN = 256
+NUM_VAL = 128
 
 
 @pytest.fixture()
@@ -31,7 +37,7 @@ def test_dl():
 
 @pytest.fixture()
 def bonsai_blank():
-    cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+    cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
     bonsai = Bonsai(cfg_path)
     yield bonsai
 
@@ -47,39 +53,44 @@ def criterion():
     yield nn.CrossEntropyLoss()
 
 
+@pytest.fixture
+def writer(tmpdir):
+    yield SummaryWriter(log_dir=tmpdir)
+
+
 def test_build_bonsai_with_no_prunner():
-    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
+    cfg_path = "example_models_for tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path)
 
 
 def test_build_bonsai_with_weight_prunner():
-    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
+    cfg_path = "example_models_for tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path, WeightL2Prunner)
 
 
 def test_bonsai_rank_method_with_weight_prunner():
-    cfg_path = "model_cfgs_for_tests/U-NET.cfg"
+    cfg_path = "example_models_for tests/configs/U-NET.cfg"
     bonsai = Bonsai(cfg_path, WeightL2Prunner)
     bonsai.rank(None, None)
 
 
 class TestBonsaiFinetune:
 
-    def test_bonsai_finetune(self, bonsai_blank, train_dl, optimizer, criterion):
+    def test_bonsai_finetune(self, bonsai_blank, train_dl, optimizer, criterion, writer):
         model_optimizer = optimizer(bonsai_blank.model.parameters())
-        bonsai_blank.finetune(train_dl, model_optimizer, criterion, max_epochs=1)
+        bonsai_blank.finetune(train_dl, model_optimizer, criterion, writer, max_epochs=1)
 
 
 # download cifar10 val and test...
 class TestBonsaiRank:
 
     def test_bonsai_rank_method_with_activation_prunner(self, val_dl, criterion):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, ActivationL2Prunner)
         bonsai.rank(val_dl, criterion)
 
     def test_bonsai_rank_method_with_gradient_prunner(self, val_dl, criterion):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
         bonsai.rank(val_dl, criterion)
         print("well")
@@ -87,20 +98,40 @@ class TestBonsaiRank:
 
 class TestWriteRecipe:
 
-    def test_write_recipe(self, val_dl):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+    def test_write_recipe(self, val_dl, tmpdir):
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
         bonsai.rank(val_dl, None)
         init_pruning_targets = bonsai.prunner.get_prunning_plan(99)
-        bonsai.write_pruned_recipe("testing.cfg", init_pruning_targets)
+        write_pruned_config(bonsai.model.full_cfg, os.path.join(tmpdir, "testing.cfg"), init_pruning_targets)
         print("well")
 
 
 class TestFullPrune:
 
-    def test_run_pruning(self, train_dl, val_dl, test_dl, criterion, optimizer):
-        cfg_path = "model_cfgs_for_tests/FCN-VGG16.cfg"
+    def test_run_pruning_fcn_vgg16(self, train_dl, val_dl, test_dl, criterion, optimizer):
+        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
 
         bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
                                 iterations=9)
+
+    def test_run_pruning_vgg19(self, train_dl, val_dl, test_dl, criterion, optimizer):
+        cfg_path = "example_models_for tests/configs/VGG19.cfg"
+        bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
+        bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
+        bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, optimizer=optimizer, criterion=criterion,
+                                iterations=9)
+
+
+class TestConfigurationFileParser:
+
+    def test_file_parsing(self, train_dl, val_dl, test_dl, criterion, optimizer):
+        if __name__ == '__main__':
+            u_in = torch.randn(1, 4, 128, 128)
+            u_net = UNet(4, 4)
+            u_out = u_net(u_in)
+
+            cfg_mem = model_to_cfg_w_routing(u_net, u_in.size(), u_out)
+            cfg_mem.summary()  # prints model cfg summary
+            cfg_mem.save_cfg('../example_models/configs/unet_from_pytorch.cfg')
