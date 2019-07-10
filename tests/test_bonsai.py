@@ -2,7 +2,7 @@ from torch import nn, optim
 from bonsai import Bonsai
 from pruning.bonsai_prunners import WeightL2Prunner, ActivationL2Prunner, TaylorExpansionPrunner
 from torchvision.datasets import CIFAR10
-from torchvision.transforms import ToTensor
+from torchvision.transforms import transforms
 from torch.utils.data import DataLoader, sampler
 from torch.utils.tensorboard import SummaryWriter
 import torch
@@ -12,26 +12,46 @@ from u_net import UNet
 import pytest
 import os
 
-NUM_TRAIN = 256
-NUM_VAL = 128
+NUM_TRAIN = 2048
+NUM_VAL = 1024
 
 
 @pytest.fixture()
-def train_dl():
-    cifar10_train = CIFAR10('.datasets/CIfAR10', train=True, download=True, transform=ToTensor())
+def train_transform():
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+    yield transform_train
+
+
+@pytest.fixture()
+def test_transform():
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+    yield transform_test
+
+
+@pytest.fixture()
+def train_dl(train_transform):
+    cifar10_train = CIFAR10('.datasets/CIfAR10', train=True, download=True, transform=train_transform)
     yield DataLoader(cifar10_train, batch_size=64, sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN)))
 
 
 @pytest.fixture()
-def val_dl():
-    cifar10_val = CIFAR10('.datasets/CIfAR10', train=True, download=True, transform=ToTensor())
+def val_dl(test_transform):
+    cifar10_val = CIFAR10('.datasets/CIfAR10', train=True, download=True, transform=test_transform)
     yield DataLoader(cifar10_val, batch_size=64,
                      sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN, NUM_TRAIN + NUM_VAL)))
 
 
 @pytest.fixture()
-def test_dl():
-    cifar10_test = CIFAR10('.datasets/CIfAR10', train=False, download=True, transform=ToTensor())
+def test_dl(test_transform):
+    cifar10_test = CIFAR10('.datasets/CIfAR10', train=False, download=True, transform=test_transform)
     yield DataLoader(cifar10_test, batch_size=64)
 
 
@@ -44,8 +64,8 @@ def bonsai_blank():
 
 @pytest.fixture()
 def optimizer():
-    adam = optim.Adam
-    yield adam
+    sgd = optim.SGD
+    yield sgd
 
 
 @pytest.fixture()
@@ -53,7 +73,7 @@ def criterion():
     yield nn.CrossEntropyLoss()
 
 
-@pytest.fixture
+@pytest.fixture()
 def writer(tmpdir):
     yield SummaryWriter(log_dir=tmpdir)
 
@@ -74,6 +94,16 @@ def test_bonsai_rank_method_with_weight_prunner():
     bonsai.rank(None, None)
 
 
+class TestEval:
+
+    def test_eval_with_vgg19_weights(self, test_dl, criterion, writer):
+        cfg_path = "example_models_for tests/configs/VGG19.cfg"
+        bonsai = Bonsai(cfg_path)
+        bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
+
+        bonsai.eval(test_dl, criterion, None)
+
+
 class TestBonsaiFinetune:
 
     def test_bonsai_finetune(self, bonsai_blank, train_dl, optimizer, criterion, writer):
@@ -82,6 +112,8 @@ class TestBonsaiFinetune:
 
 
 # download cifar10 val and test...
+
+
 class TestBonsaiRank:
 
     def test_bonsai_rank_method_with_activation_prunner(self, val_dl, criterion):
@@ -127,6 +159,7 @@ class TestFullPrune:
 class TestConfigurationFileParser:
 
     def test_file_parsing(self, train_dl, val_dl, test_dl, criterion, optimizer):
+
         if __name__ == '__main__':
             u_in = torch.randn(1, 4, 128, 128)
             u_net = UNet(4, 4)

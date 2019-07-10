@@ -24,7 +24,7 @@ class Bonsai:
 
     """
 
-    def __init__(self, model_cfg_path: str, prunner = None, normalize=False):
+    def __init__(self, model_cfg_path: str, prunner=None, normalize=False):
         self.model = BonsaiModel(model_cfg_path, self)
         if prunner is not None and isinstance(prunner(self), AbstractPrunner):
             self.prunner = prunner(self, normalize=normalize)  # type: AbstractPrunner
@@ -68,10 +68,14 @@ class Bonsai:
         print("Evaluation")
         val_evaluator = create_supervised_evaluator(self.model, criterion, device=self.device,
                                                     metrics={"acc": Accuracy(output_transform=lambda output:
-                                                    (output[0], output[1]))})
+                                                                             (output[0], output[1]))})
 
         # TODO - add eval handlers and plotting
-        attach_eval_handlers(val_evaluator, writer=writer)
+        if writer:
+            attach_eval_handlers(val_evaluator, writer=writer)
+
+        # TODO - add more verbose debugging
+        val_evaluator.add_event_handler(Events.EPOCH_COMPLETED, lambda x: print(x.state.metrics['acc']))
 
         pbar = Progbar(eval_dl, metrics='acc')
         val_evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
@@ -105,7 +109,6 @@ class Bonsai:
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
 
-        # TODO - remove writer? replace with pickling or graph for pruning?
         writer = SummaryWriter()
 
         assert prune_percent * iterations < 1, f"prune_percent * iterations is bigger than entire model, " \
@@ -125,7 +128,7 @@ class Bonsai:
 
             # run training engine on train dataset (and log recovery using val dataset and engine)
             # TODO - move optimizer to bonsai class?
-            model_optimizer = optimizer(self.model.parameters())
+            model_optimizer = optimizer(self.model.parameters(), lr=1e-6, momentum=0.9)
 
             # TODO - fix hardcoded recovery epochs
             self.finetune(train_dl, model_optimizer, criterion, writer)
