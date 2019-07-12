@@ -1,3 +1,4 @@
+from config import config
 import torch
 import numpy as np
 from ignite.engine import Events
@@ -10,6 +11,7 @@ from utils.engine_hooks import attach_eval_handlers, attach_train_handlers
 from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
     create_supervised_ranker
 from pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
+from pruning.optimizer_factory import optimizer_constructor_from_config
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -28,6 +30,8 @@ class Bonsai:
         self.model = BonsaiModel(model_cfg_path, self)
         if prunner is not None and isinstance(prunner(self), AbstractPrunner):
             self.prunner = prunner(self, normalize=normalize)  # type: AbstractPrunner
+        elif config["pruning"]["type"].get():
+            self.prunner = config["pruning"]["type"].get()
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -54,14 +58,19 @@ class Bonsai:
 
     # TODO - eval should be called at the end of each fine tuning epoch to log recovery
     # TODO - eval should also return validation loss for early stopping of fine tuning
-    def finetune(self, train_dl, optimizer, criterion, writer, max_epochs=3):
+    def finetune(self, train_dl, criterion, writer):
         print("Recovery")
         self.model.to_rank = False
+        finetune_epochs = config["pruning"]["finetune_epochs"].get()
+
+        optimizer_constructor = optimizer_constructor_from_config(config)  # TODO optimizer factory?
+        optimizer = optimizer_constructor(self.model.parameters())
+
         finetune_engine = create_supervised_trainer(self.model, optimizer, criterion, self.device)
         pbar = Progbar(train_dl, metrics='none')
         finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, pbar)
         attach_train_handlers(trainer=finetune_engine, writer=writer)
-        finetune_engine.run(train_dl, max_epochs=max_epochs)
+        finetune_engine.run(train_dl, max_epochs=finetune_epochs)
 
     # TODO - eval metrics should not be hardcoded, maybe pass metrics as a dict to eval
     def eval(self, eval_dl, criterion, writer):
@@ -103,13 +112,20 @@ class Bonsai:
         self.prunner.reset()
         self.model = new_model
 
-    def run_pruning_loop(self, train_dl, eval_dl, optimizer, criterion, prune_percent=0.1, iterations=9,
-                         device="cuda:0"):
+    def run_pruning_loop(self, train_dl, eval_dl, criterion, prune_percent=None, iterations=None):
 
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
 
-        writer = SummaryWriter()
+        if prune_percent is None:
+            prune_percent = config["pruning"]["prune_percent"].get()
+        if iterations is None:
+            iterations = config["pruning"]["num_iterations"].get()
+
+        if config["logging"]["use_tensorboard"].get():
+            writer = SummaryWriter(log_dir=config["logging"]["logdir"].get())
+        else:
+            writer = None
 
         assert prune_percent * iterations < 1, f"prune_percent * iterations is bigger than entire model, " \
             f"can't prune that much"
@@ -126,9 +142,5 @@ class Bonsai:
             # eval performance loss
             self.eval(eval_dl, criterion, writer)
 
-            # run training engine on train dataset (and log recovery using val dataset and engine)
-            # TODO - move optimizer to bonsai class?
-            model_optimizer = optimizer(self.model.parameters(), lr=1e-6, momentum=0.9)
-
             # TODO - fix hardcoded recovery epochs
-            self.finetune(train_dl, model_optimizer, criterion, writer)
+            self.finetune(train_dl, criterion, writer)

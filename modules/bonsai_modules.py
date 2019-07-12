@@ -1,24 +1,10 @@
 from typing import Dict, Any
-
 import torch
 from torch import nn
-from inspect import getfullargspec
 
 from modules.abstract_bonsai_classes import BonsaiModule, Prunable
-from modules.factories.non_linear_factory import NonLinearFactory
-
-
-def call_constructor_with_cfg(constructor, cfg: dict):
-    """
-    utility functions for constructors, filters cfg based on cfg args and kwargs and creates instance
-    :param constructor: function, should be used for class instance creation
-    :param cfg: dict, containing keys for constructor
-    :return: instance of class based on constructor and appropriate cfg
-    """
-    kwargs = getfullargspec(constructor).args
-    constructor_cfg = {k: v for (k, v) in cfg.items() if k in kwargs}
-    # print(constructor_cfg)
-    return constructor(**constructor_cfg)
+from modules.factories.activation_factory import construct_activation_from_config
+from utils.construct_utils import call_constructor_with_cfg
 
 
 def conv_layer_output_size(module_cfg, in_h, in_w):
@@ -43,8 +29,7 @@ class AbstractBConv2d(BonsaiModule):
 
         self.f = None
         if module_cfg.get('activation'):
-            activation_creator = NonLinearFactory.get_creator(module_cfg['activation'])
-            self.f = call_constructor_with_cfg(activation_creator, module_cfg)
+            self.f = construct_activation_from_config(module_cfg)
 
         # if 'in_channels' in module_cfg use it
         # if it isn't, try to use out channels of prev layer if not None
@@ -145,9 +130,8 @@ class AbstractBDeconv2d(BonsaiModule):
             self.bn = nn.BatchNorm2d(module_cfg['out_channels'])
 
         self.f = None
-        if 'activation' in module_cfg and module_cfg['activation'] is not None:
-            activation_creator = NonLinearFactory.get_creator(module_cfg['activation'])
-            self.f = call_constructor_with_cfg(activation_creator, module_cfg)
+        if module_cfg.get('activation'):
+            self.f = construct_activation_from_config(module_cfg)
 
         # takes number of input channels from prev layer
         module_cfg['in_channels'] = bonsai_model.output_channels[-1]
@@ -423,8 +407,7 @@ class BLinear(BonsaiModule):
 
         self.f = None
         if module_cfg.get('activation'):
-            activation_creator = NonLinearFactory.get_creator(module_cfg['activation'])
-            self.f = call_constructor_with_cfg(activation_creator, module_cfg)
+            self.f = construct_activation_from_config(module_cfg)
 
         # if 'in_features' in module_cfg use it
         # if it isn't, try to use out size of prev layer if not None

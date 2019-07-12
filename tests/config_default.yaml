@@ -7,7 +7,7 @@ pruning:
 
 optimizer:
   type: Adam
-  lr: 1e-5
+  lr: 0.0001
   momentum: 0.9
 
 

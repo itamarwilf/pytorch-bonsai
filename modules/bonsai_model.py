@@ -4,7 +4,6 @@ from collections import Counter
 from typing import List
 import torch
 from torch import nn
-from modules.errors import NotBonsaiModuleError
 from modules.abstract_bonsai_classes import Prunable
 from modules.factories.bonsai_module_factory import BonsaiFactory
 from modules.model_cfg_parser import basic_model_cfg_parsing
