@@ -3,6 +3,7 @@ pruning:
   type: TaylorExpansionPrunner
   num_iterations: 9
   prune_percent: 0.1
+  finetune_epochs: 3
 
 
 optimizer:
@@ -16,5 +17,6 @@ criterion:
 
 
 logging:
+  use_tensorboard: yes
   logdir: runs
   train_log_interval: 1

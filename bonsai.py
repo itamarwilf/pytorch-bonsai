@@ -1,4 +1,5 @@
 from config import config
+import os
 import torch
 import numpy as np
 from ignite.engine import Events
@@ -95,8 +96,9 @@ class Bonsai:
     def prune_model(self, num_filters_to_prune, iter_num):
         pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
         filters_to_keep = self.prunner.inverse_pruning_targets(pruning_targets)
-        out_path = f"pruning_iteration_{iter_num}.cfg"
-
+        # out_path = f"pruning_iteration_{iter_num}.cfg"
+        os.makedirs(config["pruning"]["out_path"].get(), exist_ok=True)
+        out_path = os.path.join(config["pruning"]["out_path"].get(), f"pruning_iteration_{iter_num}.cfg")
         write_pruned_config(self.model.full_cfg, out_path, filters_to_keep)
 
         self.model.propagate_pruning_targets(filters_to_keep)
