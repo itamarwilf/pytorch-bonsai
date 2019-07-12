@@ -12,8 +12,8 @@ def attach_train_handlers(trainer: Engine, writer: SummaryWriter):
         # iter = (engine.state.iteration - 1) % len(train_loader) + 1
         if engine.state.iteration % log_interval == 0:
             writer.add_scalar("training/loss", engine.state.output, engine.state.iteration)
-
-    trainer.add_event_handler(Events.ITERATION_COMPLETED, log_training_loss)
+    if writer:
+        trainer.add_event_handler(Events.ITERATION_COMPLETED, log_training_loss)
 
     # def log_training_results(engine, evaluator):
     #     evaluator.run(val_loader)
@@ -42,6 +42,7 @@ def attach_eval_handlers(evaluator: Engine, writer: SummaryWriter):
     def log_eval_metrics(engine):
         metrics = engine.state.metrics
         for metric_name, metric_value in metrics.items():
-            writer.add_scalar("val_" + metric_name, metric_value)
+            if writer:
+                writer.add_scalar("val_" + metric_name, metric_value)
 
     evaluator.add_event_handler(Events.EPOCH_COMPLETED, log_eval_metrics)

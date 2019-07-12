@@ -19,6 +19,7 @@ NUM_VAL = 128
 
 @pytest.fixture
 def logdir(tmpdir):
+    print(tmpdir)
     logging_dict = config["logging"].get()
     logging_dict["logdir"] = tmpdir
     yield

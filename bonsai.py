@@ -39,7 +39,7 @@ class Bonsai:
     def __call__(self, *args, **kwargs):
         return self.model(*args, **kwargs)
 
-    def rank(self, rank_dl, criterion):
+    def rank(self, rank_dl, criterion, writer, iter_num):
         print("Ranking")
         self.model.to_rank = True
         self.prunner.set_up()
@@ -56,6 +56,11 @@ class Bonsai:
             self.prunner.compute_model_ranks()
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
+
+        if writer:
+            histogram_name = f"layer ranks - iteration {iter_num}"
+            for i, module in self.prunner.prunable_modules_iterator():
+                writer.add_histogram(histogram_name, module.ranking, i)
 
     # TODO - eval should be called at the end of each fine tuning epoch to log recovery
     # TODO - eval should also return validation loss for early stopping of fine tuning
@@ -136,7 +141,7 @@ class Bonsai:
 
         for iteration in range(iterations):
             # run ranking engine on val dataset
-            self.rank(eval_dl, criterion)
+            self.rank(eval_dl, criterion, writer, iteration)
 
             # prune model and init optimizer, etc
             self.prune_model(num_filters_to_prune, iteration)
