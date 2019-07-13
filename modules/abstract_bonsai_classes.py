@@ -1,52 +1,82 @@
 from typing import Dict, Any
-
+import torch
 from torch import nn
+import weakref
 
 
 class BonsaiModule(nn.Module):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super(BonsaiModule, self).__init__()
-        self.bonsai_model = bonsai_model
-        self.module_cfg = self._parse_module_cfg(module_cfg)
+        self.bonsai_model = weakref.ref(bonsai_model)
+        self.module_cfg = module_cfg
 
-    @staticmethod
-    def _parse_module_cfg(module_cfg: dict) -> dict:
-        raise NotImplementedError
+    def get_model(self):
+        return self.bonsai_model()
 
     def forward(self, layer_input):
         raise NotImplementedError
 
+    def calc_layer_output_size(self, input_size):
+        raise NotImplementedError
 
-class Prunable:
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        raise NotImplementedError
+
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        raise NotImplementedError
+
+    def prune_weights(self, output_pruning_targets=None, input_pruning_targets=None):
+        weights = self.state_dict()
+        for module_name, module_tensor in weights.items():
+            if isinstance(self, Prunable):
+                module_tensor = self.prune_output(output_pruning_targets, module_name, module_tensor)
+            if input_pruning_targets:
+                module_tensor = self.prune_input(input_pruning_targets, module_name, module_tensor)
+            weights[module_name] = module_tensor
+        return weights
+
+
+class Prunable(BonsaiModule):
     """
     interface of prunable Bonsai modules
     """
-    def __init__(self):
+
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+        super().__init__(bonsai_model, module_cfg)
+        self.weights = None
         self.activation = None
+        self.grad = None
+        self.ranking = torch.zeros(self.module_cfg["out_channels"])
 
-    def prune_output(self):
+    def forward(self, layer_input):
         raise NotImplementedError
 
-    def prune_input(self):
+    def reset(self):
+        self.weights = None
+        self.activation = None
+        self.grad = None
+        self.ranking = torch.zeros(self.module_cfg["out_channels"])
+
+    def calc_layer_output_size(self, input_size):
         raise NotImplementedError
 
-    def _prune_params(self, grad):
-        # TODO call bonsai model channel ranking func
-        print(grad.size())
-        # activation_index = len(self.activations) - self.grad_index - 1
-        # activation = self.activations[activation_index]
-        # values = \
-        #     torch.sum((activation * grad), dim=0). \
-        #         sum(dim=2).sum(dim=3)[0, :, 0, 0].data
-        #
-        # # Normalize the rank by the filter dimensions
-        # values = \
-        #     values / (activation.size(0) * activation.size(2) * activation.size(3))
-        #
-        # if activation_index not in self.filter_ranks:
-        #     self.filter_ranks[activation_index] = \
-        #         torch.FloatTensor(activation.size(1)).zero_().cuda()
-        #
-        # self.filter_ranks[activation_index] += values
-        # self.grad_index += 1
+    def get_weights(self) -> torch.Tensor:
+        """
+        used to return weights with with output channels in the first dim. this is used for general implementation of
+        ranking, and later each prunable module will handle the pruning based on the ranks regardless of his dim order
+        :return: weights of prunabe module
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def prune_output(pruning_targets, module_name, module_tensor):
+        raise NotImplementedError
+
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        raise NotImplementedError
+
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        raise NotImplementedError
