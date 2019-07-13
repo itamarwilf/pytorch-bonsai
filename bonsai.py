@@ -8,6 +8,7 @@ from ignite.metrics import Accuracy
 from modules.bonsai_model import BonsaiModel
 from modules.model_cfg_parser import write_pruned_config
 from utils.progress_bar import Progbar
+from utils.efficiency_checks import speed_testing
 from utils.engine_hooks import attach_eval_handlers, attach_train_handlers
 from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
     create_supervised_ranker
@@ -69,7 +70,7 @@ class Bonsai:
         self.model.to_rank = False
         finetune_epochs = config["pruning"]["finetune_epochs"].get()
 
-        optimizer_constructor = optimizer_constructor_from_config(config)  # TODO optimizer factory?
+        optimizer_constructor = optimizer_constructor_from_config(config)
         optimizer = optimizer_constructor(self.model.parameters())
 
         finetune_engine = create_supervised_trainer(self.model, optimizer, criterion, self.device)
@@ -149,5 +150,4 @@ class Bonsai:
             # eval performance loss
             self.eval(eval_dl, criterion, writer)
 
-            # TODO - fix hardcoded recovery epochs
             self.finetune(train_dl, criterion, writer)

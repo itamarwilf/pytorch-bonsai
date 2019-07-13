@@ -1,6 +1,7 @@
 from ignite.handlers import EarlyStopping, TerminateOnNan
 from ignite.engine import Engine, Events
 from torch.utils.tensorboard import SummaryWriter
+from utils.efficiency_checks import speed_testing
 from config import config
 
 
@@ -41,8 +42,8 @@ def attach_eval_handlers(evaluator: Engine, writer: SummaryWriter):
 
     def log_eval_metrics(engine):
         metrics = engine.state.metrics
-        for metric_name, metric_value in metrics.items():
-            if writer:
+        if writer:
+            for metric_name, metric_value in metrics.items():
                 writer.add_scalar("val_" + metric_name, metric_value)
 
     evaluator.add_event_handler(Events.EPOCH_COMPLETED, log_eval_metrics)

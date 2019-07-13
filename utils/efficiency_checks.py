@@ -4,20 +4,26 @@ import time
 import tqdm
 
 
-def speed_testing(model, input_size, iterations=1000):
+def speed_testing(model, input_size, iterations=1000, verbose=True):
     """
     Test the inference time of a model on a single input
-    :param model: torch.nn.Module
-    :param input_size: tuple of ints representing the model input size (1xCxHxW for example)
-    :param iterations: average inference time over num iterations
-    :return: average inference time in seconds
+
+    Args:
+        model: torch.nn.Module
+        input_size: tuple of ints representing the model input size (1xCxHxW for example)
+        iterations: number of iterations to average over
+        verbose (bool): whether or not to print results
+
+    Returns: average inference time of model given the input
+
     """
 
     # cuDnn configurations
     cudnn.benchmark = True
     cudnn.deterministic = True
 
-    print("Speed testing")
+    if verbose:
+        print("Speed testing")
     model = model.cuda()
     random_input = torch.randn(*input_size).cuda()
 
@@ -35,7 +41,8 @@ def speed_testing(model, input_size, iterations=1000):
     time_list = time_list[1:]
     average_time = sum(time_list) / iterations
     fps = 1 / average_time
-    print(f"Done {iterations} iterations inference !")
-    print(f"Average time cost: {average_time}")
-    print(f"Frame Per Second: {fps}")
+    if verbose:
+        print(f"Done {iterations} iterations inference !")
+        print(f"Average time cost: {average_time}")
+        print(f"Frame Per Second: {fps}")
     return average_time

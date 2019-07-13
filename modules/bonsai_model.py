@@ -56,7 +56,6 @@ class BonsaiModel(torch.nn.Module):
         self._reset_forward()
         return output
 
-    # TODO needs design for nn.Linear construction, including feature map size, strides, kernel sizes, etc.
     def _create_bonsai_modules(self) -> nn.ModuleList:
         module_list = nn.ModuleList()
         # number of input channels for next layer is taken from prev layer output channels (or model input)

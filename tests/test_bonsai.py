@@ -98,10 +98,10 @@ def test_build_bonsai_with_weight_prunner():
     _ = Bonsai(cfg_path, WeightL2Prunner)
 
 
-def test_bonsai_rank_method_with_weight_prunner():
+def test_bonsai_rank_method_with_weight_prunner(writer):
     cfg_path = "example_models_for tests/configs/U-NET.cfg"
     bonsai = Bonsai(cfg_path, WeightL2Prunner)
-    bonsai.rank(None, None)
+    bonsai.rank(None, None, writer, 0)
 
 
 class TestEval:
@@ -124,24 +124,24 @@ class TestBonsaiFinetune:
 
 class TestBonsaiRank:
 
-    def test_bonsai_rank_method_with_activation_prunner(self, val_dl, criterion):
+    def test_bonsai_rank_method_with_activation_prunner(self, val_dl, criterion, writer):
         cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, ActivationL2Prunner)
-        bonsai.rank(val_dl, criterion)
+        bonsai.rank(val_dl, criterion, writer, 0)
 
-    def test_bonsai_rank_method_with_gradient_prunner(self, val_dl, criterion):
+    def test_bonsai_rank_method_with_gradient_prunner(self, val_dl, criterion, writer):
         cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
-        bonsai.rank(val_dl, criterion)
+        bonsai.rank(val_dl, criterion, writer, 0)
         print("well")
 
 
 class TestWriteRecipe:
 
-    def test_write_recipe(self, val_dl, tmpdir):
+    def test_write_recipe(self, val_dl, tmpdir, writer):
         cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
-        bonsai.rank(val_dl, None)
+        bonsai.rank(val_dl, None, writer, 0)
         init_pruning_targets = bonsai.prunner.get_prunning_plan(99)
         write_pruned_config(bonsai.model.full_cfg, os.path.join(tmpdir, "testing.cfg"), init_pruning_targets)
         print("well")

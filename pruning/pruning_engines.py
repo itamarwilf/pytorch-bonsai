@@ -64,6 +64,7 @@ def create_supervised_evaluator(model, loss_fn, metrics={},
 
     Args:
         model (`torch.nn.Module`): the model to train.
+        loss_fn (torch.nn loss function): the loss function to use.
         metrics (dict of str - :class:`~ignite.metrics.Metric`): a map of metric names to Metrics.
         device (str, optional): device type specification (default: None).
             Applies to both model and batches.
