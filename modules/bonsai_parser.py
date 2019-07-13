@@ -29,7 +29,7 @@ activation_name_dict = {nn.ReLU: 'relu',
 # These classes used to handle and parse the graph during the make dot operation
 
 # a single layer
-class BackwardModule():
+class BackwardModule:
     def __init__(self, module_id: int):
         self.module_id = module_id
         self.module_cnt = -1

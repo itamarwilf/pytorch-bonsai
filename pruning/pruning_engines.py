@@ -17,7 +17,7 @@ def _prepare_batch(batch, device=None, non_blocking=False):
 
 
 def create_supervised_trainer(model, optimizer, loss_fn,
-                              device=None, non_blocking=False,
+                              device=None, non_blocking=True,
                               prepare_batch=_prepare_batch):
     """
     Factory function for creating a trainer for supervised models.
@@ -57,13 +57,14 @@ def create_supervised_trainer(model, optimizer, loss_fn,
 
 
 def create_supervised_evaluator(model, metrics={},
-                                device=None, non_blocking=False,
+                                device=None, non_blocking=True,
                                 prepare_batch=_prepare_batch):
     """
     Factory function for creating an evaluator for supervised models.
 
     Args:
         model (`torch.nn.Module`): the model to train.
+        loss_fn (torch.nn loss function): the loss function to use.
         metrics (dict of str - :class:`~ignite.metrics.Metric`): a map of metric names to Metrics.
         device (str, optional): device type specification (default: None).
             Applies to both model and batches.

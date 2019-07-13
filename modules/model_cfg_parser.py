@@ -67,22 +67,14 @@ def validate_model_cfg(model_cfg: List[dict]) -> None:
                 raise ModuleConfigError("'conv2d' or similar layer after 'linear' or 'flatten' is not supported yet")
 
 
-def write_pruned_model_cfg(mod_defs, pruning_targets, file_path: str):
-    """
-    write new model configuration file based on a built model configuration and pruning targets
-    :param mod_defs: a list of dictionaries containing model configuration
-    :param pruning_targets: dictionary. keys are layer indices and values are list of channel indices to prune
-    :param file_path: path for new model configuration file
-    :return:
-    """
-    with open(file_path, 'w') as f:
-        for i, mod in enumerate(mod_defs):
-            # first, write model type
-            type_value = mod.pop('type')
-            f.write('[' + type_value + ']')
-            for k, v in mod.items():
-                if k == 'filters' and i - 1 in pruning_targets.keys():
-                    f.write(k + '=' + str(int(v) - len(pruning_targets[i - 1])))
+def write_pruned_config(full_cfg, output_path, pruning_targets):
+    with open(output_path, 'w')as f:
+        for i, block in enumerate(full_cfg):
+            for k, v in block.items():
+                if k == 'type':
+                    f.write('[' + v + ']')
+                elif k == 'out_channels' and i - 1 in pruning_targets.keys():
+                    f.write(k + '=' + str(len(pruning_targets[i - 1])))
                 else:
                     f.write(k + '=' + str(v))
                 f.write('\n')
