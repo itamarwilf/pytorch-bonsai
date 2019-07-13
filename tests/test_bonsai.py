@@ -68,7 +68,7 @@ def val_dl(test_transform):
 @pytest.fixture()
 def test_dl(test_transform):
     cifar10_test = CIFAR10('.datasets/CIfAR10', train=False, download=True, transform=test_transform)
-    yield DataLoader(cifar10_test, batch_size=64)
+    yield DataLoader(cifar10_test, batch_size=64, sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN)))
 
 
 @pytest.fixture()
