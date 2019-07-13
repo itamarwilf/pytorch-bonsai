@@ -1,5 +1,5 @@
 import pytest
-from utils.efficiency_checks import speed_testing
+from utils.performance_utils import speed_testing
 from bonsai import Bonsai
 
 

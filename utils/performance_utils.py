@@ -1,7 +1,14 @@
+from config import config
+from typing import List
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from torch.backends import cudnn
 import time
 import tqdm
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set()
 
 
 def speed_testing(model, input_size, iterations=1000, verbose=True):
@@ -46,3 +53,37 @@ def speed_testing(model, input_size, iterations=1000, verbose=True):
         print(f"Average time cost: {average_time}")
         print(f"Frame Per Second: {fps}")
     return average_time
+
+
+def _make_figure(x, y, x_name, y_name):
+    fig, ax = plt.subplots()
+    sns.lineplot(x, y, alpha=0.5, ax=ax)
+    sns.scatterplot(x, y, ax=ax)
+    ax.set_xlabel(x_name)
+    ax.set_ylabel(y_name)
+    prune_percent = config["pruning"]["prune_percent"].get()
+    for i, _ in enumerate(x):
+        ax.annotate(f"{100 - (i * 100 * prune_percent)}%", (x[i], y[i]))
+    return fig
+
+
+def log_performance(metrics: List[dict], writer: SummaryWriter):
+    """
+
+    Args:
+        metrics:
+        writer:
+
+    Returns:
+
+    """
+
+    avg_time = [metric_dict.pop("avg_time") for metric_dict in metrics]
+    fps = [1 / t for t in avg_time]
+    if writer:
+        for metric_name in metrics[0].keys():
+            metric_values = [metric_dict[metric_name] for metric_dict in metrics]
+            avg_time_fig = _make_figure(avg_time, metric_values, "avg_time", metric_name)
+            fps_fig = _make_figure(fps, metric_values, "FPS", metric_name)
+            writer.add_figure(f"avg time VS {metric_name}", avg_time_fig)
+            writer.add_figure(f"FPS VS {metric_name}", fps_fig)

@@ -1,7 +1,7 @@
 from ignite.handlers import EarlyStopping, TerminateOnNan
 from ignite.engine import Engine, Events
 from torch.utils.tensorboard import SummaryWriter
-from utils.efficiency_checks import speed_testing
+from utils.performance_utils import speed_testing
 from config import config
 
 
@@ -16,29 +16,8 @@ def attach_train_handlers(trainer: Engine, writer: SummaryWriter):
     if writer:
         trainer.add_event_handler(Events.ITERATION_COMPLETED, log_training_loss)
 
-    # def log_training_results(engine, evaluator):
-    #     evaluator.run(val_loader)
-    #     metrics = evaluator.state.metrics
-    #     avg_accuracy = metrics['accuracy']
-    #     avg_nll = metrics['nll']
-    #     print("Validation Results - Epoch: {}  Avg accuracy: {:.2f} Avg loss: {:.2f}"
-    #           .format(engine.state.epoch, avg_accuracy, avg_nll))
-    #     writer.add_scalar("valdation/avg_loss", avg_nll, engine.state.epoch)
-    #     writer.add_scalar("valdation/avg_accuracy", avg_accuracy, engine.state.epoch)
-    #
-    #
-    # def log_validation_results(engine, evaluator):
-    #     evaluator.run(val_loader)
-    #     metrics = evaluator.state.metrics
-    #     avg_accuracy = metrics['accuracy']
-    #     avg_nll = metrics['nll']
-    #     print("Validation Results - Epoch: {}  Avg accuracy: {:.2f} Avg loss: {:.2f}"
-    #           .format(engine.state.epoch, avg_accuracy, avg_nll))
-    #     writer.add_scalar("valdation/avg_loss", avg_nll, engine.state.epoch)
-    #     writer.add_scalar("valdation/avg_accuracy", avg_accuracy, engine.state.epoch)
 
-
-def attach_eval_handlers(evaluator: Engine, writer: SummaryWriter):
+def attach_eval_handlers(evaluator: Engine, writer: SummaryWriter, bonsai, input_size):
 
     def log_eval_metrics(engine):
         metrics = engine.state.metrics
@@ -47,3 +26,10 @@ def attach_eval_handlers(evaluator: Engine, writer: SummaryWriter):
                 writer.add_scalar("val_" + metric_name, metric_value)
 
     evaluator.add_event_handler(Events.EPOCH_COMPLETED, log_eval_metrics)
+
+    def test_model_speed(engine):
+        metrics = engine.state.metrics
+        metrics["avg_time"] = speed_testing(bonsai.model, input_size, verbose=False)
+        bonsai.metrics_list.append(metrics)
+
+    evaluator.add_event_handler(Events.EPOCH_COMPLETED, test_model_speed)

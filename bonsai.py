@@ -8,7 +8,7 @@ from ignite.metrics import Accuracy
 from modules.bonsai_model import BonsaiModel
 from modules.model_cfg_parser import write_pruned_config
 from utils.progress_bar import Progbar
-from utils.efficiency_checks import speed_testing
+from utils.performance_utils import log_performance
 from utils.engine_hooks import attach_eval_handlers, attach_train_handlers
 from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
     create_supervised_ranker
@@ -36,6 +36,7 @@ class Bonsai:
             self.prunner = config["pruning"]["type"].get()
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.metrics_list = []
 
     def __call__(self, *args, **kwargs):
         return self.model(*args, **kwargs)
@@ -88,7 +89,8 @@ class Bonsai:
 
         # TODO - add eval handlers and plotting
         if writer:
-            attach_eval_handlers(val_evaluator, writer=writer)
+            input_size = [1] + list(eval_dl.dataset[0][0].size())
+            attach_eval_handlers(val_evaluator, writer, self, input_size)
 
         # TODO - add more verbose debugging
         val_evaluator.add_event_handler(Events.EPOCH_COMPLETED, lambda x: print(x.state.metrics['acc']))
@@ -125,6 +127,8 @@ class Bonsai:
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
 
+        self.metrics_list = []
+
         if prune_percent is None:
             prune_percent = config["pruning"]["prune_percent"].get()
         if iterations is None:
@@ -140,7 +144,10 @@ class Bonsai:
 
         num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
 
+        self.eval(eval_dl, criterion, writer)
+
         for iteration in range(iterations):
+            print(iteration)
             # run ranking engine on val dataset
             self.rank(eval_dl, criterion, writer, iteration)
 
@@ -151,3 +158,5 @@ class Bonsai:
             self.eval(eval_dl, criterion, writer)
 
             self.finetune(train_dl, criterion, writer)
+
+        log_performance(self.metrics_list, writer=writer)
