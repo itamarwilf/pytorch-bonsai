@@ -4,6 +4,7 @@ pruning:
   num_iterations: 9
   prune_percent: 0.1
   finetune_epochs: 3
+  patience: 2
   out_path: pruning_results
 
 

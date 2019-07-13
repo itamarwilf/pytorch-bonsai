@@ -11,12 +11,12 @@ import seaborn as sns
 sns.set()
 
 
-def speed_testing(model, input_size, iterations=1000, verbose=True):
+def speed_testing(bonsai, input_size, iterations=1000, verbose=True):
     """
     Test the inference time of a model on a single input
 
     Args:
-        model: torch.nn.Module
+        bonsai: Bonsai containing model of type torch.nn.Module
         input_size: tuple of ints representing the model input size (1xCxHxW for example)
         iterations: number of iterations to average over
         verbose (bool): whether or not to print results
@@ -31,8 +31,8 @@ def speed_testing(model, input_size, iterations=1000, verbose=True):
 
     if verbose:
         print("Speed testing")
-    model = model.cuda()
-    random_input = torch.randn(*input_size).cuda()
+    model = bonsai.model.to(bonsai.device)
+    random_input = torch.randn(*input_size).to(bonsai.device)
 
     model.eval()
 

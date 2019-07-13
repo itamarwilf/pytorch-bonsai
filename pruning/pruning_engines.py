@@ -17,7 +17,7 @@ def _prepare_batch(batch, device=None, non_blocking=False):
 
 
 def create_supervised_trainer(model, optimizer, loss_fn,
-                              device=None, non_blocking=False,
+                              device=None, non_blocking=True,
                               prepare_batch=_prepare_batch):
     """
     Factory function for creating a trainer for supervised models.
@@ -56,8 +56,8 @@ def create_supervised_trainer(model, optimizer, loss_fn,
     return Engine(_update)
 
 
-def create_supervised_evaluator(model, loss_fn, metrics={},
-                                device=None, non_blocking=False,
+def create_supervised_evaluator(model, metrics={},
+                                device=None, non_blocking=True,
                                 prepare_batch=_prepare_batch):
     """
     Factory function for creating an evaluator for supervised models.
@@ -87,8 +87,7 @@ def create_supervised_evaluator(model, loss_fn, metrics={},
             x, y = prepare_batch(batch, device=device, non_blocking=non_blocking)
             # TODO - the '[0]' is used for support of multiple network outputs, needs fixing of engine
             y_pred = model(x)[0]
-            loss = loss_fn(y_pred, y)
-            return y_pred, y, loss.item()
+            return y_pred, y
 
     engine = Engine(_inference)
 

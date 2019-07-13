@@ -111,13 +111,13 @@ class TestEval:
         bonsai = Bonsai(cfg_path)
         bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
 
-        bonsai.eval(test_dl, criterion, None)
+        bonsai.eval(test_dl, None)
 
 
 class TestBonsaiFinetune:
 
-    def test_bonsai_finetune(self, bonsai_blank, train_dl, criterion, writer):
-        bonsai_blank.finetune(train_dl, criterion, writer)
+    def test_bonsai_finetune(self, bonsai_blank, train_dl, val_dl, criterion, writer, out_path):
+        bonsai_blank.finetune(train_dl, val_dl, criterion, writer, 0)
 
 # download cifar10 val and test...
 
@@ -153,14 +153,14 @@ class TestFullPrune:
         cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
         bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
 
-        bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, criterion=criterion,
+        bonsai.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
                                 iterations=9)
 
     def test_run_pruning_vgg19(self, train_dl, val_dl, test_dl, criterion, logdir, out_path):
         cfg_path = "example_models_for tests/configs/VGG19.cfg"
         bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
         bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
-        bonsai.run_pruning_loop(train_dl=train_dl, eval_dl=val_dl, criterion=criterion,
+        bonsai.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
                                 iterations=9)
 
 

@@ -4,12 +4,13 @@ import torch
 import numpy as np
 from ignite.engine import Events
 # from ignite.contrib.handlers.tqdm_logger import ProgressBar as Progbar
-from ignite.metrics import Accuracy
+from ignite.metrics import Loss, Accuracy
+from ignite.handlers import EarlyStopping, TerminateOnNan, ModelCheckpoint
 from modules.bonsai_model import BonsaiModel
 from modules.model_cfg_parser import write_pruned_config
 from utils.progress_bar import Progbar
 from utils.performance_utils import log_performance
-from utils.engine_hooks import attach_eval_handlers, attach_train_handlers
+from utils.engine_hooks import log_training_loss, log_evaluator_metrics, calc_model_speed, run_evaluator
 from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
     create_supervised_ranker
 from pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
@@ -64,9 +65,8 @@ class Bonsai:
             for i, module in self.prunner.prunable_modules_iterator():
                 writer.add_histogram(histogram_name, module.ranking, i)
 
-    # TODO - eval should be called at the end of each fine tuning epoch to log recovery
-    # TODO - eval should also return validation loss for early stopping of fine tuning
-    def finetune(self, train_dl, criterion, writer):
+    # TODO - option for eval being called at the end of each fine tuning epoch to log recovery
+    def finetune(self, train_dl, val_dl, criterion, writer, iter_num):
         print("Recovery")
         self.model.to_rank = False
         finetune_epochs = config["pruning"]["finetune_epochs"].get()
@@ -75,30 +75,56 @@ class Bonsai:
         optimizer = optimizer_constructor(self.model.parameters())
 
         finetune_engine = create_supervised_trainer(self.model, optimizer, criterion, self.device)
+        # progress bar
         pbar = Progbar(train_dl, metrics='none')
         finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, pbar)
-        attach_train_handlers(trainer=finetune_engine, writer=writer)
+
+        # log training loss
+        if writer:
+            finetune_engine.add_event_handler(Events.ITERATION_COMPLETED,
+                                              lambda engine: log_training_loss(engine, writer))
+
+        # terminate on Nan
+        finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, TerminateOnNan())
+
+        # model checkpoints
+        checkpoint = ModelCheckpoint(config["pruning"]["out_path"].get(), require_empty=False,
+                                     filename_prefix=f"pruning_iteration_{iter_num}", save_interval=1)
+        finetune_engine.add_event_handler(Events.COMPLETED, checkpoint, {"weights": self.model.cpu()})
+
+        # add early stopping
+        validation_evaluator = create_supervised_evaluator(self.model, device=self.device,
+                                                           metrics={"loss": Loss(criterion)})
+
+        def score_function(evaluator):
+            return -evaluator.state.metrics["loss"]
+        early_stop = EarlyStopping(config["pruning"]["patience"].get(), score_function, finetune_engine)
+        validation_evaluator.add_event_handler(Events.EPOCH_COMPLETED, early_stop)
+
+        finetune_engine.add_event_handler(Events.EPOCH_COMPLETED, lambda engine:
+                                          run_evaluator(engine, validation_evaluator, val_dl))
+
+        # run training engine
         finetune_engine.run(train_dl, max_epochs=finetune_epochs)
 
     # TODO - eval metrics should not be hardcoded, maybe pass metrics as a dict to eval
-    def eval(self, eval_dl, criterion, writer):
+    def eval(self, eval_dl, writer):
         print("Evaluation")
-        val_evaluator = create_supervised_evaluator(self.model, criterion, device=self.device,
-                                                    metrics={"acc": Accuracy(output_transform=lambda output:
-                                                                             (output[0], output[1]))})
+        evaluator = create_supervised_evaluator(self.model, device=self.device,
+                                                metrics={"acc": Accuracy()})
 
-        # TODO - add eval handlers and plotting
+        # TODO - add logger
         if writer:
-            input_size = [1] + list(eval_dl.dataset[0][0].size())
-            attach_eval_handlers(val_evaluator, writer, self, input_size)
+            evaluator.add_event_handler(Events.EPOCH_COMPLETED, lambda engine: log_evaluator_metrics(engine, writer))
 
-        # TODO - add more verbose debugging
-        val_evaluator.add_event_handler(Events.EPOCH_COMPLETED, lambda x: print(x.state.metrics['acc']))
+        input_size = [1] + list(eval_dl.dataset[0][0].size())
+        evaluator.add_event_handler(Events.EPOCH_COMPLETED,
+                                    lambda engine: calc_model_speed(engine, self, input_size))
 
         pbar = Progbar(eval_dl, metrics='acc')
-        val_evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
+        evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
 
-        val_evaluator.run(eval_dl, 1)
+        evaluator.run(eval_dl, 1)
 
     # TODO - add docstring
     def prune_model(self, num_filters_to_prune, iter_num):
@@ -122,41 +148,38 @@ class Bonsai:
         self.prunner.reset()
         self.model = new_model
 
-    def run_pruning_loop(self, train_dl, eval_dl, criterion, prune_percent=None, iterations=None):
+    def run_pruning_loop(self, train_dl, val_dl, test_dl, criterion, prune_percent=None, iterations=None):
 
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
-
         self.metrics_list = []
 
         if prune_percent is None:
             prune_percent = config["pruning"]["prune_percent"].get()
         if iterations is None:
             iterations = config["pruning"]["num_iterations"].get()
+        assert prune_percent * iterations < 1, f"prune_percent * iterations is bigger than entire model, " \
+            f"can't prune that much"
+        num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
 
         if config["logging"]["use_tensorboard"].get():
             writer = SummaryWriter(log_dir=config["logging"]["logdir"].get())
         else:
             writer = None
 
-        assert prune_percent * iterations < 1, f"prune_percent * iterations is bigger than entire model, " \
-            f"can't prune that much"
+        self.eval(test_dl, writer)
 
-        num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
-
-        self.eval(eval_dl, criterion, writer)
-
-        for iteration in range(iterations):
+        for iteration in range(1, iterations+1):
             print(iteration)
             # run ranking engine on val dataset
-            self.rank(eval_dl, criterion, writer, iteration)
+            self.rank(val_dl, criterion, writer, iteration)
 
             # prune model and init optimizer, etc
             self.prune_model(num_filters_to_prune, iteration)
 
-            # eval performance loss
-            self.eval(eval_dl, criterion, writer)
+            self.finetune(train_dl, val_dl, criterion, writer, iteration)
 
-            self.finetune(train_dl, criterion, writer)
+            # eval performance loss
+            self.eval(test_dl, writer)
 
         log_performance(self.metrics_list, writer=writer)
