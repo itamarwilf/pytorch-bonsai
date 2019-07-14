@@ -28,4 +28,3 @@ def test_total_prunable_filters():
     cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
     bonsai = Bonsai(cfg_path)
     assert bonsai.model.total_prunable_filters() == 4224
-

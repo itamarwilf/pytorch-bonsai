@@ -1,7 +1,7 @@
 from config import config
 from torch import nn
 from bonsai import Bonsai
-from pruning.bonsai_prunners import WeightL2Prunner, ActivationL2Prunner, TaylorExpansionPrunner
+from pruning.bonsai_prunners import WeightL2Prunner
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import transforms
 from torch.utils.data import DataLoader, sampler
@@ -19,16 +19,17 @@ NUM_VAL = 128
 
 @pytest.fixture
 def logdir(tmpdir):
-    print(tmpdir)
-    logging_dict = config["logging"].get()
-    logging_dict["logdir"] = tmpdir
+    # logging_dict = config["logging"].get()
+    # logging_dict["logging"]["logdir"].set(tmpdir)
+    config["logging"]["logdir"] = tmpdir
     yield
 
 
 @pytest.fixture
 def out_path(tmpdir):
-    pruning_dict = config["pruning"].get()
-    pruning_dict["out_path"] = tmpdir
+    # pruning_dict = config["pruning"].get()
+    # pruning_dict["out_path"] = tmpdir
+    config["pruning"]["out_path"] = tmpdir
     yield
 
 
@@ -72,13 +73,6 @@ def test_dl(test_transform):
 
 
 @pytest.fixture()
-def bonsai_blank():
-    cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
-    bonsai = Bonsai(cfg_path)
-    yield bonsai
-
-
-@pytest.fixture()
 def criterion():
     yield nn.CrossEntropyLoss()
 
@@ -98,70 +92,53 @@ def test_build_bonsai_with_weight_prunner():
     _ = Bonsai(cfg_path, WeightL2Prunner)
 
 
-def test_bonsai_rank_method_with_weight_prunner(writer):
-    cfg_path = "example_models_for tests/configs/U-NET.cfg"
-    bonsai = Bonsai(cfg_path, WeightL2Prunner)
-    bonsai.rank(None, None, writer, 0)
+def test_bonsai_rank_method_with_weight_prunner(unet_with_weight_prunner):
+    unet_with_weight_prunner.rank(None, None, None, 0)
 
 
 class TestEval:
 
-    def test_eval_with_vgg19_weights(self, test_dl, criterion, writer):
-        cfg_path = "example_models_for tests/configs/VGG19.cfg"
-        bonsai = Bonsai(cfg_path)
-        bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
-
-        bonsai.eval(test_dl, None)
+    def test_eval_with_vgg19_weights(self, vgg19_with_weights_prunner, test_dl, criterion, writer):
+        vgg19_with_weights_prunner.model.load_state_dict(torch.load(
+            "example_models_for tests/weights/vgg19_weights.pth"))
+        vgg19_with_weights_prunner.eval(test_dl, None)
 
 
 class TestBonsaiFinetune:
 
-    def test_bonsai_finetune(self, bonsai_blank, train_dl, val_dl, criterion, writer, out_path):
-        bonsai_blank.finetune(train_dl, val_dl, criterion, writer, 0)
-
-# download cifar10 val and test...
+    def test_bonsai_finetune(self, vgg19_with_weights_prunner, train_dl, val_dl, criterion, writer, out_path):
+        vgg19_with_weights_prunner.finetune(train_dl, val_dl, criterion, writer, 0)
 
 
 class TestBonsaiRank:
 
-    def test_bonsai_rank_method_with_activation_prunner(self, val_dl, criterion, writer):
-        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
-        bonsai = Bonsai(cfg_path, ActivationL2Prunner)
-        bonsai.rank(val_dl, criterion, writer, 0)
+    def test_bonsai_rank_method_with_activation_prunner(self, vgg19_with_activation_prunner, val_dl, criterion, writer):
+        vgg19_with_activation_prunner.rank(val_dl, criterion, writer, 0)
 
-    def test_bonsai_rank_method_with_gradient_prunner(self, val_dl, criterion, writer):
-        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
-        bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
-        bonsai.rank(val_dl, criterion, writer, 0)
-        print("well")
+    def test_bonsai_rank_method_with_gradient_prunner(self, vgg19_with_grad_prunner, val_dl, criterion, writer):
+        vgg19_with_grad_prunner.rank(val_dl, criterion, writer, 0)
 
 
 class TestWriteRecipe:
 
-    def test_write_recipe(self, val_dl, tmpdir, writer):
-        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
-        bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
-        bonsai.rank(val_dl, None, writer, 0)
-        init_pruning_targets = bonsai.prunner.get_prunning_plan(99)
-        write_pruned_config(bonsai.model.full_cfg, os.path.join(tmpdir, "testing.cfg"), init_pruning_targets)
-        print("well")
+    def test_write_recipe(self, vgg19_with_weights_prunner, val_dl, tmpdir):
+        vgg19_with_weights_prunner.rank(val_dl, None, None, 0)
+        init_pruning_targets = vgg19_with_weights_prunner.prunner.get_prunning_plan(99)
+        write_pruned_config(vgg19_with_weights_prunner.model.full_cfg, os.path.join(tmpdir, "testing.cfg"),
+                            init_pruning_targets)
 
 
 class TestFullPrune:
 
-    def test_run_pruning_fcn_vgg16(self, train_dl, val_dl, test_dl, criterion, logdir, out_path):
-        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
-        bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
+    def test_run_pruning_fcn_vgg16(self, fcn_vgg16_with_activation_prunner, train_dl, val_dl, test_dl, criterion,
+                                   logdir, out_path):
+        fcn_vgg16_with_activation_prunner.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
+                                                           criterion=criterion, iterations=9)
 
-        bonsai.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
-                                iterations=9)
-
-    def test_run_pruning_vgg19(self, train_dl, val_dl, test_dl, criterion, logdir, out_path):
-        cfg_path = "example_models_for tests/configs/VGG19.cfg"
-        bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
-        bonsai.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
-        bonsai.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
-                                iterations=9)
+    def test_run_pruning_vgg19(self, vgg19_with_grad_prunner, train_dl, val_dl, test_dl, criterion, logdir, out_path):
+        vgg19_with_grad_prunner.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
+        vgg19_with_grad_prunner.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
+                                                 iterations=9)
 
 
 class TestConfigurationFileParser:

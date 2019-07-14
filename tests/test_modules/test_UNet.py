@@ -24,19 +24,10 @@ def test_pconv2d():
     assert model_output[0].size() == (1, 32, 256, 256)
 
 
-def test_module_list():
+def test_print_module_list():
     cfg_path = "example_models_for tests/configs/pconv2d.cfg"
     model = Bonsai(cfg_path)
     print(model)
     cfg_path = "example_models_for tests/configs/U-NET.cfg"
     model = Bonsai(cfg_path)
     print(model)
-
-
-def test_total_prunable_filters():
-    cfg_path = "example_models_for tests/configs/pconv2d.cfg"
-    bonsai = Bonsai(cfg_path)
-    assert bonsai.model.total_prunable_filters() == 32
-    cfg_path = "example_models_for tests/configs/U-NET.cfg"
-    bonsai = Bonsai(cfg_path)
-    assert bonsai.model.total_prunable_filters() == 3424
