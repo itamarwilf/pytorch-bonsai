@@ -1,10 +1,11 @@
 from config import config
 import os
+from typing import Callable
 import torch
 import numpy as np
 from ignite.engine import Events
 # from ignite.contrib.handlers.tqdm_logger import ProgressBar as Progbar
-from ignite.metrics import Loss, Accuracy
+from ignite.metrics import Loss, Metric
 from ignite.handlers import EarlyStopping, TerminateOnNan, ModelCheckpoint
 from modules.bonsai_model import BonsaiModel
 from modules.model_cfg_parser import write_pruned_config
@@ -39,10 +40,14 @@ class Bonsai:
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.metrics_list = []
 
+        self._eval_handlers = []
+        self._finetune_handlers = []
+        self._metrics = {}
+
     def __call__(self, *args, **kwargs):
         return self.model(*args, **kwargs)
 
-    def rank(self, rank_dl, criterion, writer, iter_num):
+    def _rank(self, rank_dl, criterion, writer, iter_num):
         print("Ranking")
         self.model.to_rank = True
         self.prunner.set_up()
@@ -66,7 +71,7 @@ class Bonsai:
                 writer.add_histogram(histogram_name, module.ranking, i)
 
     # TODO - option for eval being called at the end of each fine tuning epoch to log recovery
-    def finetune(self, train_dl, val_dl, criterion, writer, iter_num):
+    def _finetune(self, train_dl, val_dl, criterion, writer, iter_num):
         print("Recovery")
         self.model.to_rank = False
         finetune_epochs = config["pruning"]["finetune_epochs"].get()
@@ -96,22 +101,27 @@ class Bonsai:
         validation_evaluator = create_supervised_evaluator(self.model, device=self.device,
                                                            metrics={"loss": Loss(criterion)})
 
-        def score_function(evaluator):
+        def _score_function(evaluator):
             return -evaluator.state.metrics["loss"]
-        early_stop = EarlyStopping(config["pruning"]["patience"].get(), score_function, finetune_engine)
+        early_stop = EarlyStopping(config["pruning"]["patience"].get(), _score_function, finetune_engine)
         validation_evaluator.add_event_handler(Events.EPOCH_COMPLETED, early_stop)
 
         finetune_engine.add_event_handler(Events.EPOCH_COMPLETED, lambda engine:
                                           run_evaluator(engine, validation_evaluator, val_dl))
 
+        for handler_dict in self._finetune_handlers:
+            finetune_engine.add_event_handler(handler_dict["event_name"], handler_dict["handler"],
+                                              *handler_dict["args"], **handler_dict["kwargs"])
+
         # run training engine
         finetune_engine.run(train_dl, max_epochs=finetune_epochs)
 
     # TODO - eval metrics should not be hardcoded, maybe pass metrics as a dict to eval
-    def eval(self, eval_dl, writer):
+    def _eval(self, eval_dl, writer):
         print("Evaluation")
+
         evaluator = create_supervised_evaluator(self.model, device=self.device,
-                                                metrics={"acc": Accuracy()})
+                                                metrics=self._metrics)
 
         # TODO - add logger
         if writer:
@@ -124,10 +134,14 @@ class Bonsai:
         pbar = Progbar(eval_dl, metrics='acc')
         evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
 
+        for handler_dict in self._eval_handlers:
+            evaluator.add_event_handler(handler_dict["event_name"], handler_dict["handler"],
+                                        *handler_dict["args"], **handler_dict["kwargs"])
+
         evaluator.run(eval_dl, 1)
 
     # TODO - add docstring
-    def prune_model(self, num_filters_to_prune, iter_num):
+    def _prune_model(self, num_filters_to_prune, iter_num):
         pruning_targets = self.prunner.get_prunning_plan(num_filters_to_prune)
         filters_to_keep = self.prunner.inverse_pruning_targets(pruning_targets)
         # out_path = f"pruning_iteration_{iter_num}.cfg"
@@ -148,7 +162,7 @@ class Bonsai:
         self.prunner.reset()
         self.model = new_model
 
-    def run_pruning_loop(self, train_dl, val_dl, test_dl, criterion, prune_percent=None, iterations=None):
+    def run_pruning(self, train_dl, val_dl, test_dl, criterion, prune_percent=None, iterations=None):
 
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
@@ -167,19 +181,28 @@ class Bonsai:
         else:
             writer = None
 
-        self.eval(test_dl, writer)
+        self._eval(test_dl, writer)
 
         for iteration in range(1, iterations+1):
             print(iteration)
             # run ranking engine on val dataset
-            self.rank(val_dl, criterion, writer, iteration)
+            self._rank(val_dl, criterion, writer, iteration)
 
             # prune model and init optimizer, etc
-            self.prune_model(num_filters_to_prune, iteration)
+            self._prune_model(num_filters_to_prune, iteration)
 
-            self.finetune(train_dl, val_dl, criterion, writer, iteration)
+            self._finetune(train_dl, val_dl, criterion, writer, iteration)
 
             # eval performance loss
-            self.eval(test_dl, writer)
+            self._eval(test_dl, writer)
 
         log_performance(self.metrics_list, writer=writer)
+
+    def attach_handler_to_eval(self, event: Events, handler: Callable, *args, **kwargs):
+        self._eval_handlers.append({"event_name": event, "handler": handler, "args": args, "kwargs": kwargs})
+
+    def attach_handler_to_finetune(self, event: Events, handler: Callable, *args, **kwargs):
+        self._finetune_handlers.append({"event_name": event, "handler": handler, "args": args, "kwargs": kwargs})
+
+    def attach_metric_to_eval(self, metric_name: str, metric: Metric):
+        self._metrics[metric_name] = metric

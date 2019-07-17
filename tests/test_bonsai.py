@@ -93,7 +93,7 @@ def test_build_bonsai_with_weight_prunner():
 
 
 def test_bonsai_rank_method_with_weight_prunner(unet_with_weight_prunner):
-    unet_with_weight_prunner.rank(None, None, None, 0)
+    unet_with_weight_prunner._rank(None, None, None, 0)
 
 
 class TestEval:
@@ -101,28 +101,28 @@ class TestEval:
     def test_eval_with_vgg19_weights(self, vgg19_with_weights_prunner, test_dl, criterion, writer):
         vgg19_with_weights_prunner.model.load_state_dict(torch.load(
             "example_models_for tests/weights/vgg19_weights.pth"))
-        vgg19_with_weights_prunner.eval(test_dl, None)
+        vgg19_with_weights_prunner._eval(test_dl, None)
 
 
 class TestBonsaiFinetune:
 
     def test_bonsai_finetune(self, vgg19_with_weights_prunner, train_dl, val_dl, criterion, writer, out_path):
-        vgg19_with_weights_prunner.finetune(train_dl, val_dl, criterion, writer, 0)
+        vgg19_with_weights_prunner._finetune(train_dl, val_dl, criterion, writer, 0)
 
 
 class TestBonsaiRank:
 
     def test_bonsai_rank_method_with_activation_prunner(self, vgg19_with_activation_prunner, val_dl, criterion, writer):
-        vgg19_with_activation_prunner.rank(val_dl, criterion, writer, 0)
+        vgg19_with_activation_prunner._rank(val_dl, criterion, writer, 0)
 
     def test_bonsai_rank_method_with_gradient_prunner(self, vgg19_with_grad_prunner, val_dl, criterion, writer):
-        vgg19_with_grad_prunner.rank(val_dl, criterion, writer, 0)
+        vgg19_with_grad_prunner._rank(val_dl, criterion, writer, 0)
 
 
 class TestWriteRecipe:
 
     def test_write_recipe(self, vgg19_with_weights_prunner, val_dl, tmpdir):
-        vgg19_with_weights_prunner.rank(val_dl, None, None, 0)
+        vgg19_with_weights_prunner._rank(val_dl, None, None, 0)
         init_pruning_targets = vgg19_with_weights_prunner.prunner.get_prunning_plan(99)
         write_pruned_config(vgg19_with_weights_prunner.model.full_cfg, os.path.join(tmpdir, "testing.cfg"),
                             init_pruning_targets)
@@ -132,13 +132,13 @@ class TestFullPrune:
 
     def test_run_pruning_fcn_vgg16(self, fcn_vgg16_with_activation_prunner, train_dl, val_dl, test_dl, criterion,
                                    logdir, out_path):
-        fcn_vgg16_with_activation_prunner.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
-                                                           criterion=criterion, iterations=9)
+        fcn_vgg16_with_activation_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
+                                                      criterion=criterion, iterations=9)
 
     def test_run_pruning_vgg19(self, vgg19_with_grad_prunner, train_dl, val_dl, test_dl, criterion, logdir, out_path):
         vgg19_with_grad_prunner.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
-        vgg19_with_grad_prunner.run_pruning_loop(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
-                                                 iterations=9)
+        vgg19_with_grad_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
+                                            iterations=9)
 
 
 class TestConfigurationFileParser:
