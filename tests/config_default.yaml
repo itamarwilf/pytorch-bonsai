@@ -5,7 +5,7 @@ pruning:
   prune_percent: 0.1
   finetune_epochs: 3
   out_path: pruning_results
-  early_stopping: True
+  early_stopping: False
   patience: 2
 
 
