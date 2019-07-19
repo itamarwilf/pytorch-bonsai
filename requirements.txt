@@ -1,0 +1,13 @@
+confuse
+coverage
+future
+graphviz
+matplotlib
+numpy
+pytest
+pytorch-ignite
+seaborn
+tensorboard
+torch>=1.1.0
+torchvision
+tqdm
