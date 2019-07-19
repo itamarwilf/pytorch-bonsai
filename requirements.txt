@@ -1,5 +1,6 @@
 confuse
 coverage
+future
 matplotlib
 numpy
 pytest
