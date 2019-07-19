@@ -80,3 +80,22 @@ class Prunable(BonsaiModule):
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
         raise NotImplementedError
+
+
+class Elementwise(BonsaiModule):
+
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+        super().__init__(bonsai_model, module_cfg)
+
+    def forward(self, layer_input):
+        raise NotImplementedError
+
+    def calc_layer_output_size(self, input_size):
+        raise NotImplementedError
+
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        raise NotImplementedError
+
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        raise NotImplementedError

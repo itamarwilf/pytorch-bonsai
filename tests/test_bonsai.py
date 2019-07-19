@@ -98,29 +98,29 @@ def test_bonsai_rank_method_with_weight_prunner(unet_with_weight_prunner):
 
 class TestEval:
 
-    def test_eval_with_vgg19_weights(self, vgg19_with_weights_prunner, test_dl, criterion, writer):
-        vgg19_with_weights_prunner._eval(test_dl, None)
+    def test_eval_with_vgg19_weights(self, vgg19_with_weights_prunner, test_dl, criterion):
+        vgg19_with_weights_prunner._eval(test_dl)
 
 
 class TestBonsaiFinetune:
 
-    def test_bonsai_finetune(self, vgg19_with_weights_prunner, train_dl, val_dl, criterion, writer, out_path):
-        vgg19_with_weights_prunner._finetune(train_dl, val_dl, criterion, writer, 0)
+    def test_bonsai_finetune(self, vgg19_with_weights_prunner, train_dl, val_dl, criterion, out_path):
+        vgg19_with_weights_prunner._finetune(train_dl, val_dl, criterion, 0)
 
 
 class TestBonsaiRank:
 
-    def test_bonsai_rank_method_with_activation_prunner(self, vgg19_with_activation_prunner, val_dl, criterion, writer):
-        vgg19_with_activation_prunner._rank(val_dl, criterion, writer, 0)
+    def test_bonsai_rank_method_with_activation_prunner(self, vgg19_with_activation_prunner, val_dl, criterion):
+        vgg19_with_activation_prunner._rank(val_dl, criterion, 0)
 
-    def test_bonsai_rank_method_with_gradient_prunner(self, vgg19_with_grad_prunner, val_dl, criterion, writer):
-        vgg19_with_grad_prunner._rank(val_dl, criterion, writer, 0)
+    def test_bonsai_rank_method_with_gradient_prunner(self, vgg19_with_grad_prunner, val_dl, criterion):
+        vgg19_with_grad_prunner._rank(val_dl, criterion, 0)
 
 
 class TestWriteRecipe:
 
     def test_write_recipe(self, vgg19_with_weights_prunner, val_dl, tmpdir):
-        vgg19_with_weights_prunner._rank(val_dl, None, None, 0)
+        vgg19_with_weights_prunner._rank(val_dl, None, 0)
         init_pruning_targets = vgg19_with_weights_prunner.prunner.get_prunning_plan(99)
         write_pruned_config(vgg19_with_weights_prunner.model.full_cfg, os.path.join(tmpdir, "testing.cfg"),
                             init_pruning_targets)

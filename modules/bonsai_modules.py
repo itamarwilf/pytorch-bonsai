@@ -2,7 +2,7 @@ from typing import Dict, Any
 import torch
 from torch import nn
 
-from modules.abstract_bonsai_classes import BonsaiModule, Prunable
+from modules.abstract_bonsai_classes import BonsaiModule, Prunable, Elementwise
 from modules.factories.activation_factory import construct_activation_from_config
 from utils.construct_utils import call_constructor_with_cfg
 
@@ -456,3 +456,30 @@ class BDropout(BonsaiModule):
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
         return self.get_model().pruning_targets[-1]
+
+
+class BElementwiseAdd(Elementwise):
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
+        super(BElementwiseAdd, self).__init__(bonsai_model, module_cfg)
+        # sum all the channels of concatenated tensors
+        out_channels = bonsai_model.output_channels[self.module_cfg["layers"][0]]
+        # pass output channels to next module using bonsai model
+        bonsai_model.output_channels.append(out_channels)
+
+    def forward(self, layer_input):
+        layers = self.module_cfg["layers"]
+        output = self.get_model().layer_outputs[0]
+        for layer in layers[1:]:
+            output += self.get_model().layer_outputs[layer]
+        return output
+
+    def calc_layer_output_size(self, input_size):
+        return self.get_model().output_sizes[self.module_cfg["layers"][0]]
+
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        pass
+
+    # TODO - add more documentation
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        return self.get_model().pruning_targets[self.module_cfg["layers"][0]]
