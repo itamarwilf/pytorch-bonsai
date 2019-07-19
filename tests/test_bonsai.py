@@ -13,8 +13,8 @@ from u_net import UNet
 import pytest
 import os
 
-NUM_TRAIN = 256
-NUM_VAL = 128
+NUM_TRAIN = 32
+NUM_VAL = 16
 
 
 @pytest.fixture
@@ -133,12 +133,12 @@ class TestFullPrune:
     def test_run_pruning_fcn_vgg16(self, fcn_vgg16_with_activation_prunner, train_dl, val_dl, test_dl, criterion,
                                    logdir, out_path):
         fcn_vgg16_with_activation_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
-                                                      criterion=criterion, iterations=9)
+                                                      criterion=criterion, iterations=3)
 
     def test_run_pruning_vgg19(self, vgg19_with_grad_prunner, train_dl, val_dl, test_dl, criterion, logdir, out_path):
         vgg19_with_grad_prunner.model.load_state_dict(torch.load("example_models_for tests/weights/vgg19_weights.pth"))
         vgg19_with_grad_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
-                                            iterations=9)
+                                            iterations=3)
 
 
 class TestConfigurationFileParser:
