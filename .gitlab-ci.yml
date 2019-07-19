@@ -10,5 +10,3 @@ tests:
     - coverage report
  # This regex will pull out the line coverage from the coverage report output so it will be displayed in the job page on Gitlab.
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
-  only:
-    - merge_requests
