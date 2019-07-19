@@ -5,15 +5,18 @@ from typing import List
 import torch
 from torch import nn
 from modules.abstract_bonsai_classes import Prunable
+from modules.receptive_field_calculation import calc_receptive_field
 from modules.factories.bonsai_module_factory import BonsaiFactory
 from modules.model_cfg_parser import basic_model_cfg_parsing
 
 
 class BonsaiModel(torch.nn.Module):
 
-    def __init__(self, cfg_path, bonsai):
+    def __init__(self, cfg_path, bonsai=None):
         super(BonsaiModel, self).__init__()
-        self.bonsai = weakref.ref(bonsai)
+        self.bonsai = None
+        if bonsai:
+            self.bonsai = weakref.ref(bonsai)
         self.device = None
 
         self.output_channels: List[int] = []
@@ -104,3 +107,6 @@ class BonsaiModel(torch.nn.Module):
             if current_target is None:
                 current_target = []
             self.pruning_targets.append(current_target)
+
+    def calc_receptive_field(self):
+        calc_receptive_field(self.module_cfgs)
