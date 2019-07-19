@@ -99,8 +99,6 @@ def test_bonsai_rank_method_with_weight_prunner(unet_with_weight_prunner):
 class TestEval:
 
     def test_eval_with_vgg19_weights(self, vgg19_with_weights_prunner, test_dl, criterion, writer):
-        vgg19_with_weights_prunner.model.load_state_dict(torch.load(
-            "example_models_for tests/weights/vgg19_weights.pth"))
         vgg19_with_weights_prunner._eval(test_dl, None)
 
 

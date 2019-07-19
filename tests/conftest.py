@@ -9,6 +9,9 @@ from pruning.bonsai_prunners import WeightL2Prunner, ActivationL2Prunner, Taylor
 def vgg19_with_weights_prunner():
     cfg_path = "example_models_for tests/configs/VGG19.cfg"
     bonsai = Bonsai(cfg_path, WeightL2Prunner)
+    weight_path = "example_models_for tests/weights/vgg19_weights.pth"
+    if os.path.exists(weight_path):
+        bonsai.model.load_state_dict(torch.load(weight_path))
     yield bonsai
 
 
