@@ -38,16 +38,20 @@ class Bonsai:
             self.prunner = config["pruning"]["type"].get()
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.writer = None
+
+        # metrics_list is used to store eval values across pruning procedure
         self.metrics_list = []
 
         self._eval_handlers = []
         self._finetune_handlers = []
+        # _metrics is used to store the metrics the user wants to calculate besides the loss
         self._metrics = {}
 
     def __call__(self, *args, **kwargs):
         return self.model(*args, **kwargs)
 
-    def _rank(self, rank_dl, criterion, writer, iter_num):
+    def _rank(self, rank_dl, criterion, iter_num):
         print("Ranking")
         self.model.to_rank = True
         self.prunner.set_up()
@@ -65,13 +69,13 @@ class Bonsai:
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
 
-        if writer:
+        if self.writer:
             histogram_name = f"layer ranks - iteration {iter_num}"
             for i, module in self.prunner.prunable_modules_iterator():
-                writer.add_histogram(histogram_name, module.ranking, i)
+                self.writer.add_histogram(histogram_name, module.ranking, i)
 
     # TODO - option for eval being called at the end of each fine tuning epoch to log recovery
-    def _finetune(self, train_dl, val_dl, criterion, writer, iter_num):
+    def _finetune(self, train_dl, val_dl, criterion, iter_num):
         print("Recovery")
         self.model.to_rank = False
         finetune_epochs = config["pruning"]["finetune_epochs"].get()
@@ -85,9 +89,9 @@ class Bonsai:
         finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, pbar)
 
         # log training loss
-        if writer:
+        if self.writer:
             finetune_engine.add_event_handler(Events.ITERATION_COMPLETED,
-                                              lambda engine: log_training_loss(engine, writer))
+                                              lambda engine: log_training_loss(engine, self.writer))
 
         # terminate on Nan
         finetune_engine.add_event_handler(Events.ITERATION_COMPLETED, TerminateOnNan())
@@ -99,7 +103,7 @@ class Bonsai:
 
         # add early stopping
         validation_evaluator = create_supervised_evaluator(self.model, device=self.device,
-                                                           metrics={"loss": Loss(criterion)})
+                                                           metrics=self._metrics)
 
         def _score_function(evaluator):
             return -evaluator.state.metrics["loss"]
@@ -116,16 +120,16 @@ class Bonsai:
         # run training engine
         finetune_engine.run(train_dl, max_epochs=finetune_epochs)
 
-    # TODO - eval metrics should not be hardcoded, maybe pass metrics as a dict to eval
-    def _eval(self, eval_dl, writer):
+    def _eval(self, eval_dl):
         print("Evaluation")
 
         evaluator = create_supervised_evaluator(self.model, device=self.device,
                                                 metrics=self._metrics)
 
         # TODO - add logger
-        if writer:
-            evaluator.add_event_handler(Events.EPOCH_COMPLETED, lambda engine: log_evaluator_metrics(engine, writer))
+        if self.writer:
+            evaluator.add_event_handler(Events.EPOCH_COMPLETED,
+                                        lambda engine: log_evaluator_metrics(engine, self.writer))
 
         input_size = [1] + list(eval_dl.dataset[0][0].size())
         evaluator.add_event_handler(Events.EPOCH_COMPLETED,
@@ -167,6 +171,7 @@ class Bonsai:
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
         self.metrics_list = []
+        self._metrics["loss"] = Loss(criterion)
 
         if prune_percent is None:
             prune_percent = config["pruning"]["prune_percent"].get()
@@ -177,26 +182,24 @@ class Bonsai:
         num_filters_to_prune = int(np.floor(prune_percent * self.model.total_prunable_filters()))
 
         if config["logging"]["use_tensorboard"].get():
-            writer = SummaryWriter(log_dir=config["logging"]["logdir"].get())
-        else:
-            writer = None
+            self.writer = SummaryWriter(log_dir=config["logging"]["logdir"].get())
 
-        self._eval(test_dl, writer)
+        self._eval(test_dl)
 
         for iteration in range(1, iterations+1):
             print(iteration)
             # run ranking engine on val dataset
-            self._rank(val_dl, criterion, writer, iteration)
+            self._rank(val_dl, criterion, iteration)
 
             # prune model and init optimizer, etc
             self._prune_model(num_filters_to_prune, iteration)
 
-            self._finetune(train_dl, val_dl, criterion, writer, iteration)
+            self._finetune(train_dl, val_dl, criterion, iteration)
 
             # eval performance loss
-            self._eval(test_dl, writer)
+            self._eval(test_dl)
 
-        log_performance(self.metrics_list, writer=writer)
+        log_performance(self.metrics_list, self.writer)
 
     def attach_handler_to_eval(self, event: Events, handler: Callable, *args, **kwargs):
         self._eval_handlers.append({"event_name": event, "handler": handler, "args": args, "kwargs": kwargs})
