@@ -25,23 +25,29 @@ def speed_testing(bonsai, input_size, iterations=1000, verbose=True):
 
     """
 
+    device = bonsai.device
+
     # cuDnn configurations
     cudnn.benchmark = True
     cudnn.deterministic = True
 
     if verbose:
-        print("Speed testing")
-    model = bonsai.model.to(bonsai.device)
-    random_input = torch.randn(*input_size).to(bonsai.device)
+        print(f"Speed testing using {device}")
+    model = bonsai.model.to(device)
+    random_input = torch.randn(*input_size).to(device)
 
     model.eval()
 
     time_list = []
     for _ in tqdm.tqdm(range(iterations + 1)):
-        torch.cuda.synchronize()
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+
         tic = time.time()
         model(random_input)
-        torch.cuda.synchronize()
+
+        if device.type == "cuda":
+            torch.cuda.synchronize()
         time_list.append(time.time()-tic)
 
     # the first iteration time cost much higher, so exclude the first iteration
