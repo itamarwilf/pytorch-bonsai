@@ -105,10 +105,11 @@ class Bonsai:
         validation_evaluator = create_supervised_evaluator(self.model, device=self.device,
                                                            metrics=self._metrics)
 
-        def _score_function(evaluator):
-            return -evaluator.state.metrics["loss"]
-        early_stop = EarlyStopping(config["pruning"]["patience"].get(), _score_function, finetune_engine)
-        validation_evaluator.add_event_handler(Events.EPOCH_COMPLETED, early_stop)
+        if config["pruning"]["early_stopping"].get():
+            def _score_function(evaluator):
+                return -evaluator.state.metrics["loss"]
+            early_stop = EarlyStopping(config["pruning"]["patience"].get(), _score_function, finetune_engine)
+            validation_evaluator.add_event_handler(Events.EPOCH_COMPLETED, early_stop)
 
         finetune_engine.add_event_handler(Events.EPOCH_COMPLETED, lambda engine:
                                           run_evaluator(engine, validation_evaluator, val_dl))
@@ -135,7 +136,7 @@ class Bonsai:
         evaluator.add_event_handler(Events.EPOCH_COMPLETED,
                                     lambda engine: calc_model_speed(engine, self, input_size))
 
-        pbar = Progbar(eval_dl, metrics='acc')
+        pbar = Progbar(eval_dl, None)
         evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)
 
         for handler_dict in self._eval_handlers:

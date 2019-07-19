@@ -6,6 +6,7 @@ pruning:
   finetune_epochs: 3
   patience: 2
   out_path: pruning_results
+  early_stopping: True
 
 
 optimizer:

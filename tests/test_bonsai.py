@@ -92,10 +92,6 @@ def test_build_bonsai_with_weight_prunner():
     _ = Bonsai(cfg_path, WeightL2Prunner)
 
 
-def test_bonsai_rank_method_with_weight_prunner(unet_with_weight_prunner):
-    unet_with_weight_prunner._rank(None, None, None, 0)
-
-
 class TestEval:
 
     def test_eval_with_vgg19_weights(self, vgg19_with_weights_prunner, test_dl, criterion):
@@ -109,6 +105,9 @@ class TestBonsaiFinetune:
 
 
 class TestBonsaiRank:
+
+    def test_bonsai_rank_method_with_weight_prunner(self, unet_with_weight_prunner):
+        unet_with_weight_prunner._rank(None, None, 0)
 
     def test_bonsai_rank_method_with_activation_prunner(self, vgg19_with_activation_prunner, val_dl, criterion):
         vgg19_with_activation_prunner._rank(val_dl, criterion, 0)
