@@ -1,0 +1,16 @@
+image: pytorch/pytorch
+
+install_requirements:
+  stage: build
+  script:
+    - pip install -r requirements.txt
+
+tests:
+  stage: test
+  script:
+    - echo "Running unit tests…"
+    - cd tests/
+    - coverage run --source=. -m pytest -v -s
+    - coverage report
+ # This regex will pull out the line coverage from the coverage report output so it will be displayed in the job page on Gitlab.
+  coverage: '/^TOTAL.*\s+(\d+\%)$/'
