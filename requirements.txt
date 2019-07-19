@@ -1,6 +1,7 @@
 confuse
 coverage
 future
+graphviz
 matplotlib
 numpy
 pytest
