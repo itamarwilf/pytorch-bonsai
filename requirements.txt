@@ -5,6 +5,6 @@ numpy
 pytest
 pytorch-ignite
 seaborn
-torch
+torch>=1.1.0
 torchvision
 tqdm
