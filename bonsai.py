@@ -66,6 +66,7 @@ class Bonsai:
             ranker_engine.run(rank_dl, max_epochs=1)
         else:
             self.prunner.compute_model_ranks()
+        
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
 

@@ -1,8 +1,9 @@
 import torch
 import weakref
+from typing import Iterator
 from operator import itemgetter
 from heapq import nsmallest
-from modules.abstract_bonsai_classes import Prunable
+from modules.abstract_bonsai_classes import Prunable, Elementwise
 
 
 class AbstractPrunner:
@@ -14,12 +15,19 @@ class AbstractPrunner:
     def get_bonsai(self):
         return self.bonsai()
 
-    def prunable_modules_iterator(self):
+    def prunable_modules_iterator(self) -> Iterator:
         """
         :return: iterator over module list filtered for prunable modules. holds tuples of (module index, module)
         """
         enumerator = enumerate(self.get_bonsai().model.module_list)
         return filter(lambda x: isinstance(x[1], Prunable), enumerator)
+
+    def elementwise_modules_iterator(self):
+        """
+        Returns: iterator over module list filtered for elementwise modules. holds tuple of (module index, module)
+        """
+        enumerator = enumerate(self.get_bonsai().model.module_list)
+        return filter(lambda x: isinstance(x[1], Elementwise), enumerator)
 
     def set_up(self):
         for _, module in self.prunable_modules_iterator():
@@ -64,6 +72,16 @@ class AbstractPrunner:
     def normalize_ranks(self):
         for _, module in self.prunable_modules_iterator():
             self.normalize_filter_ranks_per_layer(module)
+
+    # TODO - Pruning residuals needs more advanced design, including finding the prunables through maxpool, etc.
+    # def equalize_single_elementwise(self, module: Elementwise):
+    #     modules = [self.get_bonsai().model.module_list[i] for i in module.module_cfg["layers"]]
+    #     # can only perform equalization and pruning if all of the elementwise
+    #     if all([isinstance(module, Prunable) for module in modules]):
+    #     ranks = [module.ranking for module in modules]
+    #
+    # def equalize_elementwise(self):
+    #     for _, module in self.elementwise_modules_iterator():
 
     def lowest_ranking_filters(self, num):
         data = []
