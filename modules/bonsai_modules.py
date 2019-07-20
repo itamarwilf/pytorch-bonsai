@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import torch
 from torch import nn
-
+from itertools import chain
 from modules.abstract_bonsai_classes import BonsaiModule, Prunable, Elementwise
 from modules.factories.activation_factory import construct_activation_from_config
 from utils.construct_utils import call_constructor_with_cfg
@@ -79,11 +79,12 @@ class BConv2d(AbstractBConv2d):
     def forward(self, layer_input):
         x = self.conv2d(layer_input)
 
+        if self.bn is not None:
+            x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
-        if self.bn is not None:
-            x = self.bn(x)
         return x
 
 
@@ -101,11 +102,12 @@ class PBConv2d(AbstractBConv2d, Prunable):
         if self.get_model().to_rank:
             self.get_model().get_bonsai().prunner.attach_hooks_for_rank_calculation(self, x)
 
+        if self.bn is not None:
+            x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
-        if self.bn is not None:
-            x = self.bn(x)
         return x
 
     @staticmethod
@@ -178,6 +180,7 @@ class BDeconv2d(AbstractBDeconv2d):
 
         if self.bn is not None:
             x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
@@ -197,6 +200,7 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
 
         if self.bn is not None:
             x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
@@ -386,6 +390,8 @@ class BFlatten(BonsaiModule):
 
     def calc_layer_output_size(self, input_size):
         in_c, in_h, in_w = input_size
+        self.module_cfg["resolution"] = in_h * in_w
+        self.module_cfg["channels"] = in_c
         return in_c * in_h * in_w
 
     @staticmethod
@@ -393,10 +399,19 @@ class BFlatten(BonsaiModule):
         pass
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        pass
+        if initial_pruning_targets:
+            pruning_targets = []
+            for i in initial_pruning_targets:
+                pruning_targets.append(list(range(i * self.module_cfg["resolution"],
+                                                  (i + 1) * self.module_cfg["resolution"])))
+            return chain.from_iterable(pruning_targets)
+        else:
+            return list(range(self.module_cfg["resolution"] * self.module_cfg["channels"]))
 
 
-class BLinear(BonsaiModule):
+# region linear
+
+class AbstractBLinear(BonsaiModule):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super().__init__(bonsai_model, module_cfg)
@@ -427,14 +442,60 @@ class BLinear(BonsaiModule):
         return self.module_cfg.get("out_features")
 
     def forward(self, layer_input):
-        return self.linear(layer_input)
+        raise NotImplementedError
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
-        pass
+        if ".linear.weight" in module_name:
+            return module_tensor[:, pruning_targets]
+        else:
+            return module_tensor
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
         pass
+
+
+class BLinear(AbstractBLinear):
+
+    def forward(self, layer_input):
+        x = self.linear(layer_input)
+
+        if self.bn is not None:
+            x = self.bn(x)
+
+        if self.f is not None:
+            x = self.f(x)
+
+        return x
+
+
+class PBLinear(AbstractBLinear, Prunable):
+
+    def get_weights(self) -> torch.Tensor:
+        return self.linear.weight.data
+
+    def forward(self, layer_input):
+        x = self.linear(layer_input)
+
+        if self.get_model().to_rank:
+            self.get_model().bonsai.prunner.attach_hooks_for_rank_calculation(self, x)
+
+        if self.bn is not None:
+            x = self.bn(x)
+
+        if self.f is not None:
+            x = self.f(x)
+
+        return x
+
+    @staticmethod
+    def prune_output(pruning_targets, module_name, module_tensor):
+        if "num_batches_tracked" in module_name:
+            return module_tensor
+        else:
+            return module_tensor[pruning_targets]
+
+# endregion
 
 
 class BDropout(BonsaiModule):

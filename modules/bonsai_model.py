@@ -79,6 +79,7 @@ class BonsaiModel(torch.nn.Module):
             # get the module creator based on type
             module_creator = BonsaiFactory.get_creator(module_type)
             # create the module using the creator and module cfg
+            module_cfg["prev_out_size"] = self.output_sizes[-1]
             module = module_creator(self, module_cfg)
             self.output_sizes.append(module.calc_layer_output_size(self.output_sizes[-1]))
 
