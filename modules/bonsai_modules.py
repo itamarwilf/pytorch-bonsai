@@ -405,7 +405,7 @@ class BFlatten(BonsaiModule):
             for i in self.get_model().pruning_targets[-1]:
                 pruning_targets.append(list(range(i * self.module_cfg["resolution"],
                                                   (i + 1) * self.module_cfg["resolution"])))
-            return chain.from_iterable(pruning_targets)
+            return list(chain.from_iterable(pruning_targets))
         else:
             return list(range(self.module_cfg["resolution"] * self.module_cfg["channels"]))
 
@@ -447,13 +447,16 @@ class AbstractBLinear(BonsaiModule):
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
-        if ".linear.weight" in module_name:
+        if "linear.weight" in module_name:
             return module_tensor[:, pruning_targets]
         else:
             return module_tensor
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        pass
+        if initial_pruning_targets:
+            return initial_pruning_targets
+        elif initial_pruning_targets is None:
+            return list(range(self.module_cfg["out_features"]))
 
 
 class BLinear(AbstractBLinear):

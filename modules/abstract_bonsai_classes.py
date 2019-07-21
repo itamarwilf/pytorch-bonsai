@@ -60,7 +60,10 @@ class Prunable(BonsaiModule):
         self.weights = None
         self.activation = None
         self.grad = None
-        self.ranking = torch.zeros(self.module_cfg["out_channels"])
+        if self.module_cfg.get("out_channels"):
+            self.ranking = torch.zeros(self.module_cfg["out_channels"])
+        elif self.module_cfg.get("out_features"):
+            self.ranking = torch.zeros(self.module_cfg["out_features"])
 
     def calc_layer_output_size(self, input_size):
         raise NotImplementedError
