@@ -7,6 +7,7 @@ from modules.errors import ModuleConfigError
 def bad_config_1():
     bad_config1 = basic_model_cfg_parsing("example_models_for tests/configs/bad_config1.cfg")
     yield bad_config1
+    print('something')
 
 
 def test_linear_without_input_size(bad_config_1):

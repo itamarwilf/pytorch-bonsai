@@ -399,9 +399,10 @@ class BFlatten(BonsaiModule):
         pass
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        if initial_pruning_targets:
+        # if initial_pruning_targets:
+        if self.get_model().pruning_targets[-1]:
             pruning_targets = []
-            for i in initial_pruning_targets:
+            for i in self.get_model().pruning_targets[-1]:
                 pruning_targets.append(list(range(i * self.module_cfg["resolution"],
                                                   (i + 1) * self.module_cfg["resolution"])))
             return chain.from_iterable(pruning_targets)
@@ -478,7 +479,7 @@ class PBLinear(AbstractBLinear, Prunable):
         x = self.linear(layer_input)
 
         if self.get_model().to_rank:
-            self.get_model().bonsai.prunner.attach_hooks_for_rank_calculation(self, x)
+            self.get_model().get_bonsai().prunner.attach_hooks_for_rank_calculation(self, x)
 
         if self.bn is not None:
             x = self.bn(x)

@@ -91,7 +91,10 @@ class BonsaiModel(torch.nn.Module):
         filters = 0
         for module in self.module_list:
             if isinstance(module, Prunable):
-                filters += int(module.module_cfg.get("out_channels"))
+                if module.module_cfg.get("out_channels"):
+                    filters += int(module.module_cfg.get("out_channels"))
+                elif module.module_cfg.get("out_features"):
+                    filters += int(module.module_cfg.get("out_features"))
         return filters
 
     # TODO - add docstring
