@@ -3,7 +3,7 @@ import weakref
 from typing import Iterator
 from operator import itemgetter
 from heapq import nsmallest
-from modules.abstract_bonsai_classes import Prunable, Elementwise
+from modules.abstract_bonsai_classes import Prunable, Elementwise, BonsaiModule
 
 
 class AbstractPrunner:
@@ -73,7 +73,37 @@ class AbstractPrunner:
         for _, module in self.prunable_modules_iterator():
             self.normalize_filter_ranks_per_layer(module)
 
-    # TODO - Pruning residuals needs more advanced design, including finding the prunables through maxpool, etc.
+    # TODo - how to deal with elementwise going into another elementwise? normalize together, or one at a time
+    def recursive_find_prunables_modules(self, base_module: BonsaiModule, module_idx: int):
+        """
+        performs search for prunable modules going into the elementwise module.
+        it goes over layers going into elementwise module:
+        1. if the module is prunable, stop searching
+        2. if the module has "layers" in its config, apply this function on those modules
+        3. if the module is non of the above, apply this function to the module before it
+
+        this function will fail if it tries to perform pruning of both prunable and non prunable modules.
+        Args:
+            base_module:
+            module_idx:
+
+        Returns:
+
+        """
+        prunable_modules = []
+        for layer in base_module.module_cfg["layers"]:
+            if isinstance(layer, Prunable):
+                prunable_modules += [layer]
+            elif layer.module_cfg.get["layers"]:
+                for new_layer in layer.module_cfg.get("layers"):
+                    new_idx = module_idx + new_layer
+                    prunable_modules += \
+                        self.recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
+            else:
+                new_idx = module_idx - 1
+                self.recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
+            pass
+
     # def equalize_single_elementwise(self, module: Elementwise):
     #     modules = [self.get_bonsai().model.module_list[i] for i in module.module_cfg["layers"]]
     #     # can only perform equalization and pruning if all of the elementwise
