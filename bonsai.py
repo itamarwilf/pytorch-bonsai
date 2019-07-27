@@ -70,6 +70,8 @@ class Bonsai:
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
 
+        self.prunner.equalize_elementwise()
+
         if self.writer:
             histogram_name = f"layer ranks - iteration {iter_num}"
             for i, module in self.prunner.prunable_modules_iterator():

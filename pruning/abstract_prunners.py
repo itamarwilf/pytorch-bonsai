@@ -45,7 +45,7 @@ class AbstractPrunner:
         raise NotImplementedError
 
     @staticmethod
-    def compute_single_layer_ranks(module, *args, **kwargs):
+    def _compute_single_layer_ranks(module, *args, **kwargs):
         """
         function that computes the rank of filters in conv2d and deconv2d layers for pruning.
         this function wil be called for prunable modules during prunning process
@@ -55,11 +55,11 @@ class AbstractPrunner:
 
     def compute_model_ranks(self, engine=None):
         for _, module in self.prunable_modules_iterator():
-            layer_current_ranks = self.compute_single_layer_ranks(module)
+            layer_current_ranks = self._compute_single_layer_ranks(module)
             module.ranking += layer_current_ranks.cpu()
 
     @staticmethod
-    def normalize_filter_ranks_per_layer(module: Prunable):
+    def _normalize_filter_ranks_per_layer(module: Prunable):
         """
         performs the layer-wise l2 normalization featured in:
         [1611.06440 Pruning Convolutional Neural Networks for Resource Efficient Inference]
@@ -71,10 +71,10 @@ class AbstractPrunner:
 
     def normalize_ranks(self):
         for _, module in self.prunable_modules_iterator():
-            self.normalize_filter_ranks_per_layer(module)
+            self._normalize_filter_ranks_per_layer(module)
 
-    # TODo - how to deal with elementwise going into another elementwise? normalize together, or one at a time
-    def recursive_find_prunables_modules(self, base_module: BonsaiModule, module_idx: int):
+    # TODO - how to deal with elementwise going into another elementwise? normalize together, or one at a time
+    def _recursive_find_prunables_modules(self, base_module: BonsaiModule, module_idx: int) -> list:
         """
         performs search for prunable modules going into the elementwise module.
         it goes over layers going into elementwise module:
@@ -84,34 +84,47 @@ class AbstractPrunner:
 
         this function will fail if it tries to perform pruning of both prunable and non prunable modules.
         Args:
-            base_module:
-            module_idx:
+            base_module: the module currently being checked
+            module_idx: the modules index in the bonsai_model.module_list, used for finding the needed modules
 
-        Returns:
-
+        Returns: list of prunable modules going into the elementwise module
         """
         prunable_modules = []
-        for layer in base_module.module_cfg["layers"]:
+        for layer_idx in base_module.module_cfg["layers"]:
+            layer = self.get_bonsai().model.module_list[module_idx + layer_idx]
             if isinstance(layer, Prunable):
                 prunable_modules += [layer]
             elif layer.module_cfg.get["layers"]:
                 for new_layer in layer.module_cfg.get("layers"):
                     new_idx = module_idx + new_layer
                     prunable_modules += \
-                        self.recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
+                        self._recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
             else:
                 new_idx = module_idx - 1
-                self.recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
-            pass
+                prunable_modules += \
+                    self._recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
 
-    # def equalize_single_elementwise(self, module: Elementwise):
-    #     modules = [self.get_bonsai().model.module_list[i] for i in module.module_cfg["layers"]]
-    #     # can only perform equalization and pruning if all of the elementwise
-    #     if all([isinstance(module, Prunable) for module in modules]):
-    #     ranks = [module.ranking for module in modules]
-    #
-    # def equalize_elementwise(self):
-    #     for _, module in self.elementwise_modules_iterator():
+        return prunable_modules
+
+    def _equalize_single_elementwise(self, module: Elementwise, module_idx: int):
+        """
+        finds all prunable modules going into an elementwise module and equalize their pruning ranks
+        Args:
+            module: Elementwise module
+            module_idx: the index in the bonsai_model.module list of the elementwise module
+
+        Returns: None
+        """
+        prunable_modules = self._recursive_find_prunables_modules(module, module_idx)
+        ranks = torch.stack([prunable_module.ranking for prunable_module in prunable_modules])
+        # calculate algebraic mean of all the ranks going into that elementwise module
+        new_ranks = ranks.mean(dim=0)
+        for prunable_module in prunable_modules:
+            prunable_module.ranking = new_ranks
+
+    def equalize_elementwise(self):
+        for module_idx, module in self.elementwise_modules_iterator():
+            self._equalize_single_elementwise(module, module_idx)
 
     def lowest_ranking_filters(self, num):
         data = []
@@ -152,7 +165,7 @@ class WeightBasedPrunner(AbstractPrunner):
         pass
 
     @staticmethod
-    def compute_single_layer_ranks(module, *args, **kwargs):
+    def _compute_single_layer_ranks(module, *args, **kwargs):
         raise NotImplementedError
 
 
@@ -165,7 +178,7 @@ class ActivationBasedPrunner(AbstractPrunner):
         module.activation = x
 
     @staticmethod
-    def compute_single_layer_ranks(module, *args, **kwargs):
+    def _compute_single_layer_ranks(module, *args, **kwargs):
         raise NotImplementedError
 
 
@@ -183,5 +196,5 @@ class GradBasedPrunner(AbstractPrunner):
         module.grad = grad
 
     @staticmethod
-    def compute_single_layer_ranks(module, *args, **kwargs):
+    def _compute_single_layer_ranks(module, *args, **kwargs):
         raise NotImplementedError
