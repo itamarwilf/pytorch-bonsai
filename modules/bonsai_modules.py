@@ -250,22 +250,24 @@ class BRoute(BonsaiModule):
     # TODO - add more documentation
     def propagate_pruning_target(self, initial_pruning_targets=None):
         # get indices of layers to concat
-        layer_indices = [len(self.get_model().pruning_targets) - 1 - i for i in self.module_cfg["layers"]]
+        layer_indices = [len(self.get_model().pruning_targets) - 1 + i for i in self.module_cfg["layers"]]
         # reset desired output and index buffer
         result = []
         buffer = 0
         # iterate over concatenated layers
         for layer_idx in layer_indices:
+            # result
             # get module whose output is concatenated
-            module = self.get_model().module_list[layer_idx]
-            module_out_channels = module.module_cfg["out_channels"]
+            # module = self.get_model().module_list[layer_idx]
+            # module_out_channels = module.module_cfg["out_channels"]
+            module_out_channels = self.get_model().output_sizes[layer_idx][0]
 
-            if layer_idx in self.keys():
-                module_pruning_targets = self.get_model().pruning_targets[layer_idx]
-            else:
-                module_pruning_targets = list(range(module_out_channels))
-            module_pruning_targets = [x + buffer for x in module_pruning_targets]
-            result.extend(module_pruning_targets)
+            # if layer_idx in self.keys():
+            #     module_pruning_targets = self.get_model().pruning_targets[layer_idx]
+            # else:
+            #     module_pruning_targets = list(range(module_out_channels))
+            # module_pruning_targets = [x + buffer for x in module_pruning_targets]
+            result.extend(self.get_model().pruning_targets[layer_idx])
             buffer += module_out_channels
         return result
 
@@ -528,7 +530,7 @@ class BDropout(BonsaiModule):
 class BElementwiseAdd(Elementwise):
     def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(BElementwiseAdd, self).__init__(bonsai_model, module_cfg)
-        # sum all the channels of concatenated tensors
+
         out_channels = bonsai_model.output_channels[self.module_cfg["layers"][0]]
         # pass output channels to next module using bonsai model
         self.f = None

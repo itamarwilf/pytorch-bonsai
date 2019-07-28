@@ -36,9 +36,9 @@ def vgg19_with_grad_prunner():
 def resnet18_with_grad_prunner():
     cfg_path = "example_models_for_tests/configs/resnet18.cfg"
     bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
-    weight_path = "example_models_for_tests/weights/resnet18.pkl"
-    if os.path.exists(weight_path):
-        bonsai.model.load_state_dict(torch.load(weight_path))
+    # weight_path = "example_models_for_tests/weights/resnet18.pkl"
+    # if os.path.exists(weight_path):
+    #     bonsai.model.load_state_dict(torch.load(weight_path))
     yield bonsai
 
 

@@ -136,7 +136,8 @@ class TestFullPrune:
         vgg19_with_grad_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
                                             iterations=9)
 
-    def test_run_pruning_resnet18(self, resnet18_with_grad_prunner, train_dl, val_dl, test_dl, logdir, out_path):
+    def test_run_pruning_resnet18(self, resnet18_with_grad_prunner, train_dl, val_dl, test_dl, criterion, logdir,
+                                  out_path):
         resnet18_with_grad_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
                                                iterations=5)
 

@@ -76,7 +76,6 @@ class AbstractPrunner:
         for _, module in self.prunable_modules_iterator():
             self._normalize_filter_ranks_per_layer(module)
 
-    # TODO - how to deal with elementwise going into another elementwise? normalize together, or one at a time
     def _recursive_find_prunables_modules(self, base_module: BonsaiModule, module_idx: int) -> list:
         """
         performs search for prunable modules going into the elementwise module.
@@ -97,11 +96,9 @@ class AbstractPrunner:
             layer = self.get_bonsai().model.module_list[module_idx + layer_idx]
             if isinstance(layer, Prunable):
                 prunable_modules += [layer]
-            elif layer.module_cfg.get["layers"]:
-                for new_layer in layer.module_cfg.get("layers"):
-                    new_idx = module_idx + new_layer
-                    prunable_modules += \
-                        self._recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
+            elif layer.module_cfg.get("layers"):
+                prunable_modules += \
+                    self._recursive_find_prunables_modules(layer, module_idx + layer_idx)
             else:
                 new_idx = module_idx - 1
                 prunable_modules += \
