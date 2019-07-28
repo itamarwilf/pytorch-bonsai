@@ -13,8 +13,8 @@ from u_net import UNet
 import pytest
 import os
 
-NUM_TRAIN = 32
-NUM_VAL = 16
+NUM_TRAIN = 256
+NUM_VAL = 128
 
 
 @pytest.fixture
@@ -83,12 +83,12 @@ def writer(tmpdir):
 
 
 def test_build_bonsai_with_no_prunner():
-    cfg_path = "example_models_for tests/configs/U-NET.cfg"
+    cfg_path = "example_models_for_tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path)
 
 
 def test_build_bonsai_with_weight_prunner():
-    cfg_path = "example_models_for tests/configs/U-NET.cfg"
+    cfg_path = "example_models_for_tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path, WeightL2Prunner)
 
 
@@ -134,7 +134,11 @@ class TestFullPrune:
 
     def test_run_pruning_vgg19(self, vgg19_with_grad_prunner, train_dl, val_dl, test_dl, criterion, logdir, out_path):
         vgg19_with_grad_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
-                                            iterations=3)
+                                            iterations=9)
+
+    def test_run_pruning_resnet18(self, resnet18_with_grad_prunner, train_dl, val_dl, test_dl, logdir, out_path):
+        resnet18_with_grad_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
+                                               iterations=5)
 
 
 class TestConfigurationFileParser:
@@ -142,7 +146,7 @@ class TestConfigurationFileParser:
     def test_file_parsing(self, train_dl, val_dl, test_dl, criterion):
 
         if __name__ == '__main__':
-            u_in = torch.randn(1, 4, 128, 128)
+            u_in = torch.rand(1, 4, 128, 128)
             u_net = UNet(4, 4)
             u_out = u_net(u_in)
 

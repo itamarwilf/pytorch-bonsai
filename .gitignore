@@ -1,6 +1,6 @@
 tests/.datasets/
 example_models/weights
-tests/example_models_for tests/weights/
+tests/example_models_for_tests/weights/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

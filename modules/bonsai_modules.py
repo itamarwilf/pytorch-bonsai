@@ -224,6 +224,8 @@ class BRoute(BonsaiModule):
     def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(BRoute, self).__init__(bonsai_model, module_cfg)
         # sum all the channels of concatenated tensors
+        if isinstance(self.module_cfg["layers"], int):
+            self.module_cfg["layers"] = [self.module_cfg["layers"]]
         out_channels = sum([bonsai_model.output_channels[layer_i] for layer_i in self.module_cfg["layers"]])
         # pass output channels to next module using bonsai model
         bonsai_model.output_channels.append(out_channels)
@@ -529,13 +531,18 @@ class BElementwiseAdd(Elementwise):
         # sum all the channels of concatenated tensors
         out_channels = bonsai_model.output_channels[self.module_cfg["layers"][0]]
         # pass output channels to next module using bonsai model
+        self.f = None
+        if module_cfg.get('activation'):
+            self.f = construct_activation_from_config(module_cfg)
         bonsai_model.output_channels.append(out_channels)
 
     def forward(self, layer_input):
         layers = self.module_cfg["layers"]
-        output = self.get_model().layer_outputs[0]
+        output = self.get_model().layer_outputs[layers[0]]
         for layer in layers[1:]:
             output += self.get_model().layer_outputs[layer]
+        if self.f:
+            output = self.f(output)
         return output
 
     def calc_layer_output_size(self, input_size):
