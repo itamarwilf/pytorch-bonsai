@@ -1,18 +1,18 @@
 import pytest
-from utils.performance_utils import speed_testing
+from bonsai.utils.performance_utils import speed_testing
 from bonsai import Bonsai
 
 
 @pytest.fixture()
 def vgg16():
-    cfg_path = "example_models_for_tests/configs/FCN-VGG16.cfg"
+    cfg_path = "tests/example_models_for_tests/configs/FCN-VGG16.cfg"
     bonsai = Bonsai(cfg_path)
     yield bonsai
 
 
 @pytest.fixture()
 def unet():
-    cfg_path = "example_models_for_tests/configs/U-NET.cfg"
+    cfg_path = "tests/example_models_for_tests/configs/U-NET.cfg"
     bonsai = Bonsai(cfg_path)
     yield bonsai
 

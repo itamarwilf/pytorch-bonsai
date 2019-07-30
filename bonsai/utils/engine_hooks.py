@@ -1,8 +1,7 @@
-from ignite.handlers import EarlyStopping, TerminateOnNan
-from ignite.engine import Engine, Events
+from ignite.engine import Engine
 from torch.utils.tensorboard import SummaryWriter
-from utils.performance_utils import speed_testing
-from config import config
+from bonsai.utils.performance_utils import speed_testing
+from bonsai.config import config
 
 log_interval = config["logging"]["train_log_interval"].get()
 

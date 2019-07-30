@@ -1,4 +1,4 @@
-from config import config
+from bonsai.config import config
 from typing import List
 import torch
 from torch.utils.tensorboard import SummaryWriter

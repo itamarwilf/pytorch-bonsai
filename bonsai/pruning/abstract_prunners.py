@@ -4,7 +4,7 @@ import weakref
 from typing import Iterator
 # from operator import itemgetter
 # from heapq import nsmallest
-from modules.abstract_bonsai_classes import Prunable, Elementwise, BonsaiModule
+from bonsai.modules.abstract_bonsai_classes import Prunable, Elementwise, BonsaiModule
 
 
 class AbstractPrunner:

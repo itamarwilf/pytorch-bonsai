@@ -1,4 +1,4 @@
-from modules.bonsai_modules import *
+from bonsai.modules.bonsai_modules import *
 
 
 class BonsaiFactory:

@@ -2,9 +2,9 @@ from typing import Dict, Any
 import torch
 from torch import nn
 from itertools import chain
-from modules.abstract_bonsai_classes import BonsaiModule, Prunable, Elementwise
-from modules.factories.activation_factory import construct_activation_from_config
-from utils.construct_utils import call_constructor_with_cfg
+from bonsai.modules.abstract_bonsai_classes import BonsaiModule, Prunable, Elementwise
+from bonsai.modules.factories.activation_factory import construct_activation_from_config
+from bonsai.utils.construct_utils import call_constructor_with_cfg
 
 
 def conv_layer_output_size(module_cfg, in_h, in_w):

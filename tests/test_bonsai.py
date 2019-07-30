@@ -9,14 +9,14 @@ from torchvision.datasets import CIFAR10
 from torchvision.transforms import transforms
 
 from bonsai import Bonsai
-from config import config
-from modules.bonsai_parser import model_to_cfg_w_routing
-from modules.model_cfg_parser import write_pruned_config
-from pruning.bonsai_prunners import WeightL2Prunner
+from bonsai.config import config
+from bonsai.modules.bonsai_parser import model_to_cfg_w_routing
+from bonsai.modules.model_cfg_parser import write_pruned_config
+from bonsai.pruning.bonsai_prunners import WeightL2Prunner
 from u_net import UNet
 
-NUM_TRAIN = 256
-NUM_VAL = 128
+NUM_TRAIN = 32
+NUM_VAL = 16
 
 
 @pytest.fixture
@@ -53,20 +53,20 @@ def test_transform():
 
 @pytest.fixture()
 def train_dl(train_transform):
-    cifar10_train = CIFAR10('.datasets/CIfAR10', train=True, download=True, transform=train_transform)
+    cifar10_train = CIFAR10('tests/.datasets/CIfAR10', train=True, download=True, transform=train_transform)
     yield DataLoader(cifar10_train, batch_size=64, sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN)))
 
 
 @pytest.fixture()
 def val_dl(test_transform):
-    cifar10_val = CIFAR10('.datasets/CIfAR10', train=True, download=True, transform=test_transform)
+    cifar10_val = CIFAR10('tests/.datasets/CIfAR10', train=True, download=True, transform=test_transform)
     yield DataLoader(cifar10_val, batch_size=64,
                      sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN, NUM_TRAIN + NUM_VAL)))
 
 
 @pytest.fixture()
 def test_dl(test_transform):
-    cifar10_test = CIFAR10('.datasets/CIfAR10', train=False, download=True, transform=test_transform)
+    cifar10_test = CIFAR10('tests/.datasets/CIfAR10', train=False, download=True, transform=test_transform)
     yield DataLoader(cifar10_test, batch_size=64, sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN)))
 
 
@@ -81,12 +81,12 @@ def writer(tmpdir):
 
 
 def test_build_bonsai_with_no_prunner():
-    cfg_path = "example_models_for_tests/configs/U-NET.cfg"
+    cfg_path = "tests/example_models_for_tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path)
 
 
 def test_build_bonsai_with_weight_prunner():
-    cfg_path = "example_models_for_tests/configs/U-NET.cfg"
+    cfg_path = "tests/example_models_for_tests/configs/U-NET.cfg"
     _ = Bonsai(cfg_path, WeightL2Prunner)
 
 
@@ -151,4 +151,4 @@ class TestConfigurationFileParser:
 
             cfg_mem = model_to_cfg_w_routing(u_net, u_in.size(), u_out)
             cfg_mem.summary()  # prints model cfg summary
-            cfg_mem.save_cfg('../example_models/configs/unet_from_pytorch.cfg')
+            cfg_mem.save_cfg('example_models/configs/unet_from_pytorch.cfg')

@@ -1,22 +1,21 @@
-from config import config
 import os
 from typing import Callable
-import torch
 import numpy as np
+import torch
 from ignite.engine import Events
-# from ignite.contrib.handlers.tqdm_logger import ProgressBar as Progbar
+from ignite.handlers import TerminateOnNan, ModelCheckpoint, EarlyStopping
 from ignite.metrics import Loss, Metric
-from ignite.handlers import EarlyStopping, TerminateOnNan, ModelCheckpoint
-from modules.bonsai_model import BonsaiModel
-from modules.model_cfg_parser import write_pruned_config
-from utils.progress_bar import Progbar
-from utils.performance_utils import log_performance
-from utils.engine_hooks import log_training_loss, log_evaluator_metrics, calc_model_speed, run_evaluator
-from pruning.pruning_engines import create_supervised_trainer, create_supervised_evaluator, \
-    create_supervised_ranker
-from pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
-from pruning.optimizer_factory import optimizer_constructor_from_config
 from torch.utils.tensorboard import SummaryWriter
+from bonsai.utils.progress_bar import Progbar
+from bonsai.utils.performance_utils import log_performance
+from bonsai.config import config
+from bonsai.modules.bonsai_model import BonsaiModel
+from bonsai.modules.model_cfg_parser import write_pruned_config
+from bonsai.pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
+from bonsai.pruning.optimizer_factory import optimizer_constructor_from_config
+from bonsai.pruning.pruning_engines import create_supervised_ranker, create_supervised_trainer, \
+    create_supervised_evaluator
+from bonsai.utils.engine_hooks import log_training_loss, run_evaluator, log_evaluator_metrics, calc_model_speed
 
 
 class Bonsai:
@@ -66,7 +65,7 @@ class Bonsai:
             ranker_engine.run(rank_dl, max_epochs=1)
         else:
             self.prunner.compute_model_ranks()
-        
+
         if self.prunner.normalize:
             self.prunner.normalize_ranks()
 

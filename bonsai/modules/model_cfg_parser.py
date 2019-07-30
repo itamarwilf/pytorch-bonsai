@@ -1,5 +1,5 @@
 from typing import List
-from modules.errors import ModuleConfigError
+from bonsai.modules.errors import ModuleConfigError
 
 
 GLOBAL_MODULE_CFGS = ["type", "name", "output"]
