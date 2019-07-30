@@ -2,8 +2,6 @@ import torch
 import numpy as np
 import weakref
 from typing import Iterator
-# from operator import itemgetter
-# from heapq import nsmallest
 from bonsai.modules.abstract_bonsai_classes import Prunable, Elementwise, BonsaiModule
 
 
@@ -148,7 +146,7 @@ class AbstractPrunner:
         max_prunable_rank = ranks[desired_num_to_prune]
         ranks_mask = ranks <= max_prunable_rank
         current_num_filters_to_prune = sum(ranks_mask)
-        self.pruning_residual = num_filters_to_prune - current_num_filters_to_prune
+        self.pruning_residual = current_num_filters_to_prune - num_filters_to_prune
 
         return data[:current_num_filters_to_prune]
 
