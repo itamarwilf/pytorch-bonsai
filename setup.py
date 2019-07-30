@@ -23,7 +23,8 @@ install_requires = ["confuse",
                     "tqdm"]
 
 tests_require = ["coverage",
-                 "pytest"]
+                 "pytest",
+                 "torchvision"]
 
 setup(
     name='pytorch-bonsai',

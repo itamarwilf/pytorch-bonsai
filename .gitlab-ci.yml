@@ -5,8 +5,20 @@ tests:
   script:
     - pip install -r requirements.txt
     - echo "Running unit tests…"
-    - cd tests/
     - coverage run --source=. -m pytest -v -s
     - coverage report
  # This regex will pull out the line coverage from the coverage report output so it will be displayed in the job page on Gitlab.
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
+  only:
+    - triggers
+
+deploy_package:
+  stage: build
+  variables:
+    TWINE_USERNAME: $PRODUCTION_USERNAME
+    TWINE_PASSWORD: $PRODUCTION_PASSWORD
+  script:
+    - wine upload --repository-url https://test.pypi.org/legacy/ dist/*
+  only:
+    - triggers
+    - master
