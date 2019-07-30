@@ -1,17 +1,19 @@
-from config import config
+import os
+
+import pytest
+import torch
 from torch import nn
-from bonsai import Bonsai
-from pruning.bonsai_prunners import WeightL2Prunner
-from torchvision.datasets import CIFAR10
-from torchvision.transforms import transforms
 from torch.utils.data import DataLoader, sampler
 from torch.utils.tensorboard import SummaryWriter
-import torch
+from torchvision.datasets import CIFAR10
+from torchvision.transforms import transforms
+
+from bonsai import Bonsai
+from config import config
 from modules.bonsai_parser import model_to_cfg_w_routing
 from modules.model_cfg_parser import write_pruned_config
+from pruning.bonsai_prunners import WeightL2Prunner
 from u_net import UNet
-import pytest
-import os
 
 NUM_TRAIN = 256
 NUM_VAL = 128
@@ -19,16 +21,12 @@ NUM_VAL = 128
 
 @pytest.fixture
 def logdir(tmpdir):
-    # logging_dict = config["logging"].get()
-    # logging_dict["logging"]["logdir"].set(tmpdir)
     config["logging"]["logdir"] = tmpdir
     yield
 
 
 @pytest.fixture
 def out_path(tmpdir):
-    # pruning_dict = config["pruning"].get()
-    # pruning_dict["out_path"] = tmpdir
     config["pruning"]["out_path"] = tmpdir
     yield
 
