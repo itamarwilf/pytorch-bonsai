@@ -34,6 +34,8 @@ setup(
     author='Itamar Wilf',
     author_email='',
     description='Basic pruning for Pytorch neural netwroks',
+    long_description=readme,
+    long_description_content_type="text/markdown",
     zip_safe=True,
     install_requires=install_requires,
     tests_require=tests_require
