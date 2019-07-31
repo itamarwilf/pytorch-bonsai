@@ -135,8 +135,10 @@ class Bonsai:
                                         lambda engine: log_evaluator_metrics(engine, self.writer))
 
         input_size = [1] + list(eval_dl.dataset[0][0].size())
-        evaluator.add_event_handler(Events.EPOCH_COMPLETED,
-                                    lambda engine: calc_model_speed(engine, self, input_size))
+        if config["evaluate"]["eval_speed"].get():
+            evaluator.add_event_handler(Events.EPOCH_COMPLETED,
+                                        lambda engine: calc_model_speed(engine, self, input_size,
+                                                                        config["evaluate"]["eval_speed"].get()))
 
         pbar = Progbar(eval_dl, None)
         evaluator.add_event_handler(Events.ITERATION_COMPLETED, pbar)

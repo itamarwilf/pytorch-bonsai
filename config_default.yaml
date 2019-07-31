@@ -23,3 +23,6 @@ logging:
   use_tensorboard: yes
   logdir: runs
   train_log_interval: 1
+
+evaluate:
+  eval_speed: 5 # inference iterations to average when measuring inference time, 0 for no measurement
