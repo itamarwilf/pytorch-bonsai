@@ -10,7 +10,8 @@ tests:
  # This regex will pull out the line coverage from the coverage report output so it will be displayed in the job page on Gitlab.
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
   only:
-    - api
+    - dev
+    - master
 
 deploy_package:
   stage: build
@@ -20,5 +21,4 @@ deploy_package:
   script:
     - wine upload --repository-url https://test.pypi.org/legacy/ dist/*
   only:
-    - triggers
     - master
