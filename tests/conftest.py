@@ -44,6 +44,7 @@ def vgg19_weights_path():
     weight_path = "tests/example_models_for_tests/weights/vgg19_weights.pth"
     if not os.path.exists(weight_path):
         download_file_from_google_drive('1oC8R2AKx9Grl6QDAswZnrPn6LV-ixpgk', weight_path)
+    yield weight_path
 
 
 @pytest.fixture()
