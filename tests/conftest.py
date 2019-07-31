@@ -43,6 +43,8 @@ def save_response_content(response, destination):
 def vgg19_weights_path():
     weight_path = "tests/example_models_for_tests/weights/vgg19_weights.pth"
     if not os.path.exists(weight_path):
+        print("Downloading vgg19 weights...")
+        os.makedirs(os.path.dirname(weight_path), exist_ok=True)
         download_file_from_google_drive('1oC8R2AKx9Grl6QDAswZnrPn6LV-ixpgk', weight_path)
     yield weight_path
 
