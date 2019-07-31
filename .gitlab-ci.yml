@@ -4,6 +4,7 @@ tests:
   stage: test
   script:
     - pip install -r requirements.txt
+    - pip install -r tests/requirements.txt
     - echo "Running unit tests…"
     - coverage run --source=. -m pytest -v -s
     - coverage report
