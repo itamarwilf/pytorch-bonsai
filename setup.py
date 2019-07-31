@@ -24,6 +24,7 @@ install_requires = ["confuse",
 
 tests_require = ["coverage",
                  "pytest",
+                 "requests",
                  "torchvision"]
 
 setup(
