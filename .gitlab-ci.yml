@@ -1,12 +1,26 @@
 image: python:3.6
 
+stages:
+  - test
+  - build
+
 tests:
   stage: test
   script:
     - pip install -r requirements.txt
+    - pip install -r tests/requirements.txt
     - echo "Running unit tests…"
-    - cd tests/
     - coverage run --source=. -m pytest -v -s
     - coverage report
  # This regex will pull out the line coverage from the coverage report output so it will be displayed in the job page on Gitlab.
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
+
+deploy_package:
+  stage: build
+  variables:
+    TWINE_USERNAME: $pypi_user
+    TWINE_PASSWORD: $pypi_pass
+  script:
+    - twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+  only:
+    - master

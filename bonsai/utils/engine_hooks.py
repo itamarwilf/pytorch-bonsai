@@ -1,8 +1,7 @@
-from ignite.handlers import EarlyStopping, TerminateOnNan
-from ignite.engine import Engine, Events
+from ignite.engine import Engine
 from torch.utils.tensorboard import SummaryWriter
-from utils.performance_utils import speed_testing
-from config import config
+from bonsai.utils.performance_utils import speed_testing
+from bonsai.config import config
 
 log_interval = config["logging"]["train_log_interval"].get()
 
@@ -20,9 +19,9 @@ def log_evaluator_metrics(engine: Engine, writer: SummaryWriter):
             writer.add_scalar("val_" + metric_name, metric_value)
 
 
-def calc_model_speed(engine: Engine, bonsai, input_size):
+def calc_model_speed(engine: Engine, bonsai, input_size, iterations):
     metrics = engine.state.metrics
-    metrics["avg_time"] = speed_testing(bonsai, input_size, verbose=False)
+    metrics["avg_time"] = speed_testing(bonsai, input_size, verbose=False, iterations=iterations)
     bonsai.metrics_list.append(metrics)
 
 

@@ -10,5 +10,4 @@ def call_constructor_with_cfg(constructor, cfg: dict):
     """
     kwargs = getfullargspec(constructor).args
     constructor_cfg = {k: v for (k, v) in cfg.items() if k in kwargs}
-    # print(constructor_cfg)
     return constructor(**constructor_cfg)
