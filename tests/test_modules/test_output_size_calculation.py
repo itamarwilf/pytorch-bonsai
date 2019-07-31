@@ -4,14 +4,14 @@ from bonsai import Bonsai
 
 @pytest.fixture
 def unet_fixed_size():
-    cfg_path = "example_models_for tests/configs/U-NET_fixed_size.cfg"
+    cfg_path = "tests/example_models_for_tests/configs/U-NET_fixed_size.cfg"
     bonsai = Bonsai(cfg_path)
     yield bonsai
 
 
 @pytest.fixture
 def unet_arbitrary_size():
-    cfg_path = "example_models_for tests/configs/U-NET.cfg"
+    cfg_path = "tests/example_models_for_tests/configs/U-NET.cfg"
     bonsai = Bonsai(cfg_path)
     yield bonsai
 

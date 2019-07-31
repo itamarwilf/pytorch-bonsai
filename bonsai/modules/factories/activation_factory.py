@@ -1,5 +1,5 @@
 from torch import nn
-from utils.construct_utils import call_constructor_with_cfg
+from bonsai.utils.construct_utils import call_constructor_with_cfg
 
 
 def construct_activation_from_config(config: dict):

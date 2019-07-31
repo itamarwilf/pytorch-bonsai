@@ -1,10 +1,10 @@
 from typing import Dict, Any
 import torch
 from torch import nn
-
-from modules.abstract_bonsai_classes import BonsaiModule, Prunable
-from modules.factories.activation_factory import construct_activation_from_config
-from utils.construct_utils import call_constructor_with_cfg
+from itertools import chain
+from bonsai.modules.abstract_bonsai_classes import BonsaiModule, Prunable, Elementwise
+from bonsai.modules.factories.activation_factory import construct_activation_from_config
+from bonsai.utils.construct_utils import call_constructor_with_cfg
 
 
 def conv_layer_output_size(module_cfg, in_h, in_w):
@@ -79,11 +79,12 @@ class BConv2d(AbstractBConv2d):
     def forward(self, layer_input):
         x = self.conv2d(layer_input)
 
+        if self.bn is not None:
+            x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
-        if self.bn is not None:
-            x = self.bn(x)
         return x
 
 
@@ -101,11 +102,12 @@ class PBConv2d(AbstractBConv2d, Prunable):
         if self.get_model().to_rank:
             self.get_model().get_bonsai().prunner.attach_hooks_for_rank_calculation(self, x)
 
+        if self.bn is not None:
+            x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
-        if self.bn is not None:
-            x = self.bn(x)
         return x
 
     @staticmethod
@@ -178,6 +180,7 @@ class BDeconv2d(AbstractBDeconv2d):
 
         if self.bn is not None:
             x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
@@ -197,6 +200,7 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
 
         if self.bn is not None:
             x = self.bn(x)
+
         if self.f is not None:
             x = self.f(x)
 
@@ -220,6 +224,8 @@ class BRoute(BonsaiModule):
     def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
         super(BRoute, self).__init__(bonsai_model, module_cfg)
         # sum all the channels of concatenated tensors
+        if isinstance(self.module_cfg["layers"], int):
+            self.module_cfg["layers"] = [self.module_cfg["layers"]]
         out_channels = sum([bonsai_model.output_channels[layer_i] for layer_i in self.module_cfg["layers"]])
         # pass output channels to next module using bonsai model
         bonsai_model.output_channels.append(out_channels)
@@ -244,22 +250,24 @@ class BRoute(BonsaiModule):
     # TODO - add more documentation
     def propagate_pruning_target(self, initial_pruning_targets=None):
         # get indices of layers to concat
-        layer_indices = [len(self.get_model().pruning_targets) - 1 - i for i in self.module_cfg["layers"]]
+        layer_indices = [len(self.get_model().pruning_targets) - 1 + i for i in self.module_cfg["layers"]]
         # reset desired output and index buffer
         result = []
         buffer = 0
         # iterate over concatenated layers
         for layer_idx in layer_indices:
+            # result
             # get module whose output is concatenated
-            module = self.get_model().module_list[layer_idx]
-            module_out_channels = module.module_cfg["out_channels"]
+            # module = self.get_model().module_list[layer_idx]
+            # module_out_channels = module.module_cfg["out_channels"]
+            module_out_channels = self.get_model().output_sizes[layer_idx][0]
 
-            if layer_idx in self.keys():
-                module_pruning_targets = self.get_model().pruning_targets[layer_idx]
-            else:
-                module_pruning_targets = list(range(module_out_channels))
-            module_pruning_targets = [x + buffer for x in module_pruning_targets]
-            result.extend(module_pruning_targets)
+            # if layer_idx in self.keys():
+            #     module_pruning_targets = self.get_model().pruning_targets[layer_idx]
+            # else:
+            #     module_pruning_targets = list(range(module_out_channels))
+            # module_pruning_targets = [x + buffer for x in module_pruning_targets]
+            result.extend(self.get_model().pruning_targets[layer_idx])
             buffer += module_out_channels
         return result
 
@@ -386,6 +394,8 @@ class BFlatten(BonsaiModule):
 
     def calc_layer_output_size(self, input_size):
         in_c, in_h, in_w = input_size
+        self.module_cfg["resolution"] = in_h * in_w
+        self.module_cfg["channels"] = in_c
         return in_c * in_h * in_w
 
     @staticmethod
@@ -393,10 +403,20 @@ class BFlatten(BonsaiModule):
         pass
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        pass
+        # if initial_pruning_targets:
+        if self.get_model().pruning_targets[-1]:
+            pruning_targets = []
+            for i in self.get_model().pruning_targets[-1]:
+                pruning_targets.append(list(range(i * self.module_cfg["resolution"],
+                                                  (i + 1) * self.module_cfg["resolution"])))
+            return list(chain.from_iterable(pruning_targets))
+        else:
+            return list(range(self.module_cfg["resolution"] * self.module_cfg["channels"]))
 
 
-class BLinear(BonsaiModule):
+# region linear
+
+class AbstractBLinear(BonsaiModule):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super().__init__(bonsai_model, module_cfg)
@@ -427,14 +447,63 @@ class BLinear(BonsaiModule):
         return self.module_cfg.get("out_features")
 
     def forward(self, layer_input):
-        return self.linear(layer_input)
+        raise NotImplementedError
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
-        pass
+        if "linear.weight" in module_name:
+            return module_tensor[:, pruning_targets]
+        else:
+            return module_tensor
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
-        pass
+        if initial_pruning_targets:
+            return initial_pruning_targets
+        elif initial_pruning_targets is None:
+            return list(range(self.module_cfg["out_features"]))
+
+
+class BLinear(AbstractBLinear):
+
+    def forward(self, layer_input):
+        x = self.linear(layer_input)
+
+        if self.bn is not None:
+            x = self.bn(x)
+
+        if self.f is not None:
+            x = self.f(x)
+
+        return x
+
+
+class PBLinear(AbstractBLinear, Prunable):
+
+    def get_weights(self) -> torch.Tensor:
+        return self.linear.weight.data
+
+    def forward(self, layer_input):
+        x = self.linear(layer_input)
+
+        if self.get_model().to_rank:
+            self.get_model().get_bonsai().prunner.attach_hooks_for_rank_calculation(self, x)
+
+        if self.bn is not None:
+            x = self.bn(x)
+
+        if self.f is not None:
+            x = self.f(x)
+
+        return x
+
+    @staticmethod
+    def prune_output(pruning_targets, module_name, module_tensor):
+        if "num_batches_tracked" in module_name:
+            return module_tensor
+        else:
+            return module_tensor[pruning_targets]
+
+# endregion
 
 
 class BDropout(BonsaiModule):
@@ -456,3 +525,35 @@ class BDropout(BonsaiModule):
 
     def propagate_pruning_target(self, initial_pruning_targets=None):
         return self.get_model().pruning_targets[-1]
+
+
+class BElementwiseAdd(Elementwise):
+    def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):
+        super(BElementwiseAdd, self).__init__(bonsai_model, module_cfg)
+
+        out_channels = bonsai_model.output_channels[self.module_cfg["layers"][0]]
+        # pass output channels to next module using bonsai model
+        self.f = None
+        if module_cfg.get('activation'):
+            self.f = construct_activation_from_config(module_cfg)
+        bonsai_model.output_channels.append(out_channels)
+
+    def forward(self, layer_input):
+        layers = self.module_cfg["layers"]
+        output = self.get_model().layer_outputs[layers[0]]
+        for layer in layers[1:]:
+            output += self.get_model().layer_outputs[layer]
+        if self.f:
+            output = self.f(output)
+        return output
+
+    def calc_layer_output_size(self, input_size):
+        return self.get_model().output_sizes[self.module_cfg["layers"][0]]
+
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        pass
+
+    # TODO - add more documentation
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        return self.get_model().pruning_targets[self.module_cfg["layers"][0]]

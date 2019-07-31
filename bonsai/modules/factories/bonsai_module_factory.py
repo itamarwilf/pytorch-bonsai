@@ -1,4 +1,4 @@
-from modules.bonsai_modules import *
+from bonsai.modules.bonsai_modules import *
 
 
 class BonsaiFactory:
@@ -33,7 +33,10 @@ BonsaiFactory.register_new_creator('deconv2d', BDeconv2d)
 BonsaiFactory.register_new_creator('prunable_deconv2d', PBDeconv2d)
 BonsaiFactory.register_new_creator('route', BRoute)
 BonsaiFactory.register_new_creator('maxpool', BMaxPool2d)
+BonsaiFactory.register_new_creator('avgpool2d', BAvgPool2d)
 BonsaiFactory.register_new_creator('pixel_shuffle', BPixelShuffle)
 BonsaiFactory.register_new_creator('flatten', BFlatten)
 BonsaiFactory.register_new_creator('linear', BLinear)
+BonsaiFactory.register_new_creator('prunable_linear', PBLinear)
 BonsaiFactory.register_new_creator('dropout', BDropout)
+BonsaiFactory.register_new_creator('residual_add', BElementwiseAdd)

@@ -4,10 +4,10 @@ from collections import Counter
 from typing import List
 import torch
 from torch import nn
-from modules.abstract_bonsai_classes import Prunable
-from modules.receptive_field_calculation import calc_receptive_field
-from modules.factories.bonsai_module_factory import BonsaiFactory
-from modules.model_cfg_parser import basic_model_cfg_parsing
+from bonsai.modules.abstract_bonsai_classes import Prunable
+from bonsai.modules.receptive_field_calculation import calc_receptive_field
+from bonsai.modules.factories.bonsai_module_factory import BonsaiFactory
+from bonsai.modules.model_cfg_parser import basic_model_cfg_parsing
 
 
 class BonsaiModel(torch.nn.Module):
@@ -79,6 +79,7 @@ class BonsaiModel(torch.nn.Module):
             # get the module creator based on type
             module_creator = BonsaiFactory.get_creator(module_type)
             # create the module using the creator and module cfg
+            module_cfg["prev_out_size"] = self.output_sizes[-1]
             module = module_creator(self, module_cfg)
             self.output_sizes.append(module.calc_layer_output_size(self.output_sizes[-1]))
 
@@ -90,7 +91,10 @@ class BonsaiModel(torch.nn.Module):
         filters = 0
         for module in self.module_list:
             if isinstance(module, Prunable):
-                filters += int(module.module_cfg.get("out_channels"))
+                if module.module_cfg.get("out_channels"):
+                    filters += int(module.module_cfg.get("out_channels"))
+                elif module.module_cfg.get("out_features"):
+                    filters += int(module.module_cfg.get("out_features"))
         return filters
 
     # TODO - add docstring

@@ -1,5 +1,5 @@
 from typing import List
-from modules.errors import ModuleConfigError
+from bonsai.modules.errors import ModuleConfigError
 
 
 GLOBAL_MODULE_CFGS = ["type", "name", "output"]
@@ -73,9 +73,12 @@ def write_pruned_config(full_cfg, output_path, pruning_targets):
             for k, v in block.items():
                 if k == 'type':
                     f.write('[' + v + ']')
-                elif k == 'out_channels' and i - 1 in pruning_targets.keys():
+                elif (k == 'out_channels' or k == 'out_features') and i - 1 in pruning_targets.keys():
                     f.write(k + '=' + str(len(pruning_targets[i - 1])))
                 else:
-                    f.write(k + '=' + str(v))
+                    if isinstance(v, list):
+                        f.write(k + "=" + ",".join(str(x) for x in v))
+                    else:
+                        f.write(k + '=' + str(v))
                 f.write('\n')
             f.write('\n')

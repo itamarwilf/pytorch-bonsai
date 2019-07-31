@@ -4,8 +4,9 @@ pruning:
   num_iterations: 9
   prune_percent: 0.1
   finetune_epochs: 3
-  patience: 2
   out_path: pruning_results
+  early_stopping: False
+  patience: 2
 
 
 optimizer:
@@ -22,3 +23,6 @@ logging:
   use_tensorboard: yes
   logdir: runs
   train_log_interval: 1
+
+evaluate:
+  eval_speed: 5 # inference iterations to average when measuring inference time, 0 for no measurement

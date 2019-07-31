@@ -1,5 +1,5 @@
 import pytest
-from modules.bonsai_model import BonsaiModel
+from bonsai.modules.bonsai_model import BonsaiModel
 import torch
 
 
@@ -7,7 +7,7 @@ class TestPConv2d:
 
     @pytest.fixture
     def pconv2d(self):
-        cfg_path = "example_models_for tests/configs/pconv2d.cfg"
+        cfg_path = "tests/example_models_for_tests/configs/pconv2d.cfg"
         bonsai = BonsaiModel(cfg_path, None)
         yield bonsai
 
@@ -27,7 +27,7 @@ class TestFCNVGG16:
 
     @pytest.fixture()
     def fcn_vgg16(self):
-        cfg_path = "example_models_for tests/configs/FCN-VGG16.cfg"
+        cfg_path = "tests/example_models_for_tests/configs/FCN-VGG16.cfg"
         model = BonsaiModel(cfg_path, None)
         yield model
 
@@ -47,7 +47,7 @@ class TestUNET:
 
     @pytest.fixture(scope="class")
     def unet(self):
-        cfg_path = "example_models_for tests/configs/U-NET.cfg"
+        cfg_path = "tests/example_models_for_tests/configs/U-NET.cfg"
         model = BonsaiModel(cfg_path, None)
         yield model
 
@@ -67,7 +67,7 @@ class TestVGG19:
 
     @pytest.fixture(scope="class")
     def vgg19(self):
-        cfg_path = "example_models_for tests/configs/VGG19.cfg"
+        cfg_path = "tests/example_models_for_tests/configs/VGG19.cfg"
         model = BonsaiModel(cfg_path, None)
         yield model
 
@@ -82,3 +82,25 @@ class TestVGG19:
         model_input = torch.rand(1, 3, 32, 32)
         model_output = vgg19(model_input)
         assert model_output[0].size() == (1, 10)
+
+
+class TestResnet18:
+
+    @pytest.fixture(scope="class")
+    def resnet18(self):
+        cfg_path = "tests/example_models_for_tests/configs/resnet18.cfg"
+        model = BonsaiModel(cfg_path, None)
+        yield model
+
+    def test_print_module_list(self, resnet18):
+        print(resnet18)
+
+    # - TODO - calc actual number of prunable filters
+    # def test_total_prunable_filters_unet(self, vgg19):
+    #     assert vgg19.total_prunable_filters() == 3424
+
+    def test_run_vgg19(self, resnet18):
+        model_input = torch.rand(1, 3, 32, 32)
+        model_output = resnet18(model_input)
+        assert model_output[0].size() == (1, 10)
+

@@ -1,6 +1,6 @@
 from torch import optim
 from confuse import Configuration
-from utils.construct_utils import call_constructor_with_cfg
+from bonsai.utils.construct_utils import call_constructor_with_cfg
 
 
 def optimizer_constructor_from_config(config: Configuration):
