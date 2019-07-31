@@ -50,6 +50,7 @@ class Bonsai:
     def __call__(self, *args, **kwargs):
         return self.model(*args, **kwargs)
 
+    # TODO - wrap most of _rank functionality inside bonsai.prunning.abstract_prunners.AbstractPrunner
     def _rank(self, rank_dl, criterion, iter_num):
         print("Ranking")
         self.model.to_rank = True

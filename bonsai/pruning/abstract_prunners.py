@@ -36,7 +36,6 @@ class AbstractPrunner:
     def reset(self):
         for _, module in self.prunable_modules_iterator():
             module.reset()
-        self.pruning_residual = 0
 
     def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         """
@@ -146,7 +145,7 @@ class AbstractPrunner:
         max_prunable_rank = ranks[desired_num_to_prune]
         ranks_mask = ranks <= max_prunable_rank
         current_num_filters_to_prune = sum(ranks_mask)
-        self.pruning_residual = current_num_filters_to_prune - num_filters_to_prune
+        self.pruning_residual = current_num_filters_to_prune - desired_num_to_prune
 
         return data[:current_num_filters_to_prune]
 

@@ -1,5 +1,9 @@
 image: python:3.6
 
+stages:
+  - test
+  - build
+
 tests:
   stage: test
   script:
