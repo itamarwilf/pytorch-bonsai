@@ -33,9 +33,9 @@ def vgg19_with_grad_prunner():
 
 
 @pytest.fixture()
-def resnet18_with_grad_prunner():
+def resnet18_with_weight_l2_prunner():
     cfg_path = "tests/example_models_for_tests/configs/resnet18.cfg"
-    bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
+    bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
     # weight_path = "example_models_for_tests/weights/resnet18.pkl"
     # if os.path.exists(weight_path):
     #     bonsai.model.load_state_dict(torch.load(weight_path))
