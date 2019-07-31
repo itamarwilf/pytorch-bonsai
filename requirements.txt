@@ -5,6 +5,7 @@ matplotlib
 numpy
 pytorch-ignite
 seaborn
-tb-nightly
+tensorboard
+Pillow
 torch>=1.1.0
 tqdm
