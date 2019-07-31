@@ -17,6 +17,6 @@ deploy_package:
     TWINE_USERNAME: $pypi_user
     TWINE_PASSWORD: $pypi_pass
   script:
-    - wine upload --repository-url https://test.pypi.org/legacy/ dist/*
+    - twine upload --repository-url https://test.pypi.org/legacy/ dist/*
   only:
     - master
