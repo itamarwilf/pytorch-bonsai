@@ -15,8 +15,8 @@ tests:
 deploy_package:
   stage: build
   variables:
-    TWINE_USERNAME: $PRODUCTION_USERNAME
-    TWINE_PASSWORD: $PRODUCTION_PASSWORD
+    TWINE_USERNAME: $pypi_user
+    TWINE_PASSWORD: $pypi_pass
   script:
     - wine upload --repository-url https://test.pypi.org/legacy/ dist/*
   only:

@@ -15,8 +15,8 @@ from bonsai.modules.model_cfg_parser import write_pruned_config
 from bonsai.pruning.bonsai_prunners import WeightL2Prunner
 from u_net import UNet
 
-NUM_TRAIN = 32
-NUM_VAL = 16
+NUM_TRAIN = 4
+NUM_VAL = 2
 
 
 @pytest.fixture
