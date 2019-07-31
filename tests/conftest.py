@@ -40,6 +40,15 @@ def save_response_content(response, destination):
 
 
 @pytest.fixture
+def device():
+    if torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
+    yield device
+
+
+@pytest.fixture
 def vgg19_weights_path():
     weight_path = "tests/example_models_for_tests/weights/vgg19_weights.pth"
     if not os.path.exists(weight_path):
@@ -50,26 +59,26 @@ def vgg19_weights_path():
 
 
 @pytest.fixture()
-def vgg19_with_weights_prunner(vgg19_weights_path):
+def vgg19_with_weights_prunner(vgg19_weights_path, device):
     cfg_path = "tests/example_models_for_tests/configs/VGG19.cfg"
     bonsai = Bonsai(cfg_path, WeightL2Prunner)
-    bonsai.model.load_state_dict(torch.load(vgg19_weights_path))
+    bonsai.model.load_state_dict(torch.load(vgg19_weights_path, map_location=device))
     yield bonsai
 
 
 @pytest.fixture()
-def vgg19_with_activation_prunner(vgg19_weights_path):
+def vgg19_with_activation_prunner(vgg19_weights_path, device):
     cfg_path = "tests/example_models_for_tests/configs/VGG19.cfg"
     bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
-    bonsai.model.load_state_dict(torch.load(vgg19_weights_path))
+    bonsai.model.load_state_dict(torch.load(vgg19_weights_path, map_location=device))
     yield bonsai
 
 
 @pytest.fixture()
-def vgg19_with_grad_prunner(vgg19_weights_path):
+def vgg19_with_grad_prunner(vgg19_weights_path, device):
     cfg_path = "tests/example_models_for_tests/configs/VGG19.cfg"
     bonsai = Bonsai(cfg_path, TaylorExpansionPrunner, normalize=True)
-    bonsai.model.load_state_dict(torch.load(vgg19_weights_path))
+    bonsai.model.load_state_dict(torch.load(vgg19_weights_path, map_location=device))
 
     yield bonsai
 
