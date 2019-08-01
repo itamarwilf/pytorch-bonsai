@@ -12,7 +12,7 @@ class Config(object):
     config = None
     """The confuse.Configuration object."""
 
-    def __init__(self, config_path="config_default.yaml"):
+    def __init__(self, config_path="config_default.yml"):
         if self.config is None:
             self.config = confuse.Configuration("BonsaiPruning", __name__)
             self.config.set_file(config_path)

@@ -9,9 +9,11 @@ tests:
   script:
     - pip install -r requirements.txt
     - pip install -r tests/requirements.txt
+    - pip install codecov
     - echo "Running unit tests…"
     - coverage run --source=. -m pytest -v -s
     - coverage report
+    - codecov --token=$CODECOV_TOKEN
  # This regex will pull out the line coverage from the coverage report output so it will be displayed in the job page on Gitlab.
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
   except:
@@ -20,8 +22,8 @@ tests:
 deploy_package:
   stage: build
   variables:
-    TWINE_USERNAME: $pypi_user
-    TWINE_PASSWORD: $pypi_pass
+    TWINE_USERNAME: $PYPI_USER
+    TWINE_PASSWORD: $PYPI_PASS
   script:
     - pip install twine
     - python setup.py sdist bdist_wheel
