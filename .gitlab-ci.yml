@@ -13,7 +13,7 @@ tests:
     - echo "Running unit tests…"
     - coverage run --source=. -m pytest -v -s
     - coverage report
-    - bash <(curl -s https://codecov.io/bash) -t $CODECOV_TOKEN
+    - codecov -t=$CODECOV_TOKEN
  # This regex will pull out the line coverage from the coverage report output so it will be displayed in the job page on Gitlab.
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
   except:
