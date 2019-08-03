@@ -68,8 +68,11 @@ def validate_model_cfg(model_cfg: List[dict]) -> None:
 
 
 def write_pruned_config(full_cfg, output_path, pruning_targets):
+    write_layer_num = False
     with open(output_path, 'w')as f:
         for i, block in enumerate(full_cfg):
+            if write_layer_num:
+                f.write(f"#{i - 1}\n")
             for k, v in block.items():
                 if k == 'type':
                     f.write('[' + v + ']')
@@ -82,3 +85,4 @@ def write_pruned_config(full_cfg, output_path, pruning_targets):
                         f.write(k + '=' + str(v))
                 f.write('\n')
             f.write('\n')
+            write_layer_num = True

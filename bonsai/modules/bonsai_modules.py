@@ -24,7 +24,7 @@ class AbstractBConv2d(BonsaiModule):
         super(AbstractBConv2d, self).__init__(bonsai_model, module_cfg)
 
         self.bn = None
-        if 'batch_normalize' in module_cfg and module_cfg['batch_normalize']:
+        if module_cfg.get('batch_normalize'):
             self.bn = nn.BatchNorm2d(module_cfg['out_channels'])
 
         self.f = None
@@ -557,3 +557,46 @@ class BElementwiseAdd(Elementwise):
     # TODO - add more documentation
     def propagate_pruning_target(self, initial_pruning_targets=None):
         return self.get_model().pruning_targets[self.module_cfg["layers"][0]]
+
+
+class BBatchNorm2d(BonsaiModule):
+    def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
+        super(BBatchNorm2d, self).__init__(bonsai_model, module_cfg)
+        # if 'in_channels' in module_cfg use it
+        # if it isn't, try to use out channels of prev layer if not None
+        # if None, raise error
+        if "in_channels" in module_cfg.keys():
+            pass
+        else:
+            prev_layer_output = bonsai_model.output_channels[-1]
+            if prev_layer_output is None:
+                raise ValueError
+            module_cfg['in_channels'] = bonsai_model.output_channels[-1]
+
+        self.bn = nn.BatchNorm2d(module_cfg["in_channels"])
+
+        self.f = None
+        if module_cfg.get('activation'):
+            self.f = construct_activation_from_config(module_cfg)
+        # TODO - the following line is important for model building, document well or find safer implementation
+        bonsai_model.output_channels.append(module_cfg['in_channels'])
+
+    def forward(self, layer_input):
+        x = self.bn(layer_input)
+        if self.f is not None:
+            x = self.f(x)
+        return x
+
+    def calc_layer_output_size(self, input_size):
+        in_c, in_h, in_w = input_size
+        return in_c, in_h, in_w
+
+    @staticmethod
+    def prune_input(pruning_targets, module_name, module_tensor):
+        if "num_batches_tracked" in module_name:
+            return module_tensor
+        else:
+            return module_tensor[pruning_targets]
+
+    def propagate_pruning_target(self, initial_pruning_targets=None):
+        return self.get_model().pruning_targets[-1]

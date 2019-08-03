@@ -69,7 +69,7 @@ class BonsaiModel(torch.nn.Module):
         self.output_sizes.append((in_c, in_h, in_w))
         counter = Counter()
         # iterate over module definitions to create and add modules to bonsai model
-        for module_cfg in self.module_cfgs:
+        for layer_num, module_cfg in enumerate(self.module_cfgs):
             # TODO - maybe take names from original parsed model after jit traced parsing is implemented
             module_type = module_cfg['type']
             counter[module_type] += 1

@@ -84,9 +84,9 @@ def vgg19_with_grad_prunner(vgg19_weights_path, device):
 
 
 @pytest.fixture()
-def resnet18_with_weight_l2_prunner():
+def resnet18_with_activation_l2_prunner():
     cfg_path = "tests/example_models_for_tests/configs/resnet18.cfg"
-    bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
+    bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
     # weight_path = "example_models_for_tests/weights/resnet18.pkl"
     # if os.path.exists(weight_path):
     #     bonsai.model.load_state_dict(torch.load(weight_path))
@@ -94,9 +94,16 @@ def resnet18_with_weight_l2_prunner():
 
 
 @pytest.fixture()
-def fcn_vgg16_with_activation_prunner():
-    cfg_path = "tests/example_models_for_tests/configs/FCN-VGG16.cfg"
+def resnet18_new_bn_with_activation_l2_prunner():
+    cfg_path = "tests/example_models_for_tests/configs/resnet18_new_bn.cfg"
     bonsai = Bonsai(cfg_path, ActivationL2Prunner, normalize=True)
+    yield bonsai
+
+
+@pytest.fixture()
+def fcn_vgg16_with_weight_l2_prunner():
+    cfg_path = "tests/example_models_for_tests/configs/FCN-VGG16.cfg"
+    bonsai = Bonsai(cfg_path, WeightL2Prunner, normalize=True)
     yield bonsai
 
 

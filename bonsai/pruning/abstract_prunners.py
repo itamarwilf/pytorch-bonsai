@@ -88,14 +88,17 @@ class AbstractPrunner:
 
         Returns: list of prunable modules going into the elementwise module
         """
+
         prunable_modules = []
-        for layer_idx in base_module.module_cfg["layers"]:
-            layer = self.get_bonsai().model.module_list[module_idx + layer_idx]
-            if isinstance(layer, Prunable):
-                prunable_modules += [layer]
-            elif layer.module_cfg.get("layers"):
+
+        if base_module.module_cfg.get("layers"):
+            for layer_idx in base_module.module_cfg["layers"]:
+                layer = self.get_bonsai().model.module_list[module_idx + layer_idx]
                 prunable_modules += \
                     self._recursive_find_prunables_modules(layer, module_idx + layer_idx)
+        else:
+            if isinstance(base_module, Prunable):
+                prunable_modules += [base_module]
             else:
                 new_idx = module_idx - 1
                 prunable_modules += \
