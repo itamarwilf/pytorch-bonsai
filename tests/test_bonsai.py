@@ -8,9 +8,11 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import transforms
 
+import torchvision.models.resnet50 as resnet
+
 from bonsai import Bonsai
 from bonsai.config import config
-from bonsai.modules.bonsai_parser import model_to_cfg_w_routing
+from bonsai.modules.bonsai_parser import bonsai_parser
 from bonsai.modules.model_cfg_parser import write_pruned_config
 from bonsai.pruning.bonsai_prunners import WeightL2Prunner
 from u_net import UNet
@@ -139,16 +141,25 @@ class TestFullPrune:
         resnet18_with_weight_l2_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
                                                     prune_percent=0.05, iterations=5)
 
-
 class TestConfigurationFileParser:
 
-    def test_file_parsing(self, train_dl, val_dl, test_dl, criterion):
-
+    def test_unet_parsing(self):
         if __name__ == '__main__':
             u_in = torch.rand(1, 4, 128, 128)
             u_net = UNet(4, 4)
-            u_out = u_net(u_in)
 
-            cfg_mem = model_to_cfg_w_routing(u_net, u_in.size(), u_out)
-            cfg_mem.summary()  # prints model cfg summary
-            cfg_mem.save_cfg('example_models/configs/unet_from_pytorch.cfg')
+            # testing on unet
+            bonsai_parsed_model = bonsai_parser(u_net, u_in)
+            bonsai_parsed_model.summary()  # prints model cfg summary
+            bonsai_parsed_model.save_cfg('example_models/configs/unet_from_pytorch.cfg')
+
+    def test_resnet_parsing(self):
+        if __name__ == '__main__':
+            resnet50 = resnet()
+            resnet_in = torch.rand((1, 3, 512, 512))
+
+            # testing on unet
+            bonsai_parsed_model = bonsai_parser(resnet50, resnet_in)
+            bonsai_parsed_model.summary()  # prints model cfg summary
+            bonsai_parsed_model.save_cfg('example_models/configs/resnet50_from_pytorch.cfg')
+
