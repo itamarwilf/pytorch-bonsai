@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import transforms
 
-import torchvision.models.resnet50 as resnet
+from torchvision.models import resnet50 as resnet
 
 from bonsai import Bonsai
 from bonsai.config import config
