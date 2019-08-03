@@ -7,5 +7,6 @@ pytorch-ignite
 seaborn
 tensorboard
 Pillow
+pyyaml
 torch>=1.1.0
 tqdm

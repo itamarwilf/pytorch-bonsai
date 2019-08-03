@@ -11,7 +11,7 @@ from bonsai.utils.performance_utils import log_performance
 from bonsai.config import config
 from bonsai.modules.bonsai_model import BonsaiModel
 from bonsai.modules.model_cfg_parser import write_pruned_config
-from bonsai.pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
+from bonsai.pruning.abstract_pruners import AbstractPrunner, WeightBasedPrunner
 from bonsai.pruning.optimizer_factory import optimizer_constructor_from_config
 from bonsai.pruning.pruning_engines import create_supervised_ranker, create_supervised_trainer, \
     create_supervised_evaluator
@@ -20,21 +20,22 @@ from bonsai.utils.engine_hooks import log_training_loss, run_evaluator, log_eval
 
 class Bonsai:
     """
-    main class of the library, which contains the following components:
-    - model: built of simple, prunable pytorch layers
-    - prunner: an object in charge of the pruning process
+    Main class of the library, which contains the following components:
+    - model: a pytorch nn.Module built of custom wrappers for layers to allow pruning
+    - pruner: an object in charge of the pruning process
 
-    the interaction between the components is as followed:
-    the prunner includes instructions of performing the pruning
-
+    Args:
+        model_cfg_path (str): a path to the model config file, look at example models for reference.
+        pruner (callable): a constructor for a subclass of prunning.AbstractPrunner.
+        normalize (bool): whether or not to normalize layer ranks when calculating which neurons to prune
     """
 
-    def __init__(self, model_cfg_path: str, prunner=None, normalize=False):
+    def __init__(self, model_cfg_path: str, pruner=None, normalize=False):
         self.model = BonsaiModel(model_cfg_path, self)
-        if prunner is not None and isinstance(prunner(self), AbstractPrunner):
-            self.prunner = prunner(self, normalize=normalize)  # type: AbstractPrunner
-        elif config["pruning"]["type"].get():
-            self.prunner = config["pruning"]["type"].get()
+        if pruner is not None and isinstance(pruner(self), AbstractPrunner):
+            self.prunner = pruner(self, normalize=normalize)  # type: AbstractPrunner
+        # elif config["pruning"]["type"].get():
+        #     self.prunner = config["pruning"]["type"].get()
 
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.writer = None
@@ -108,11 +109,11 @@ class Bonsai:
         validation_evaluator = create_supervised_evaluator(self.model, device=self.device,
                                                            metrics=self._metrics)
 
-        if config["pruning"]["early_stopping"].get():
-            def _score_function(evaluator):
-                return -evaluator.state.metrics["loss"]
-            early_stop = EarlyStopping(config["pruning"]["patience"].get(), _score_function, finetune_engine)
-            validation_evaluator.add_event_handler(Events.EPOCH_COMPLETED, early_stop)
+        # if config["pruning"]["early_stopping"].get():
+        #     def _score_function(evaluator):
+        #         return -evaluator.state.metrics["loss"]
+        #     early_stop = EarlyStopping(config["pruning"]["patience"].get(), _score_function, finetune_engine)
+        #     validation_evaluator.add_event_handler(Events.EPOCH_COMPLETED, early_stop)
 
         finetune_engine.add_event_handler(Events.EPOCH_COMPLETED, lambda engine:
                                           run_evaluator(engine, validation_evaluator, val_dl))
@@ -173,7 +174,26 @@ class Bonsai:
         self.model = new_model
 
     def run_pruning(self, train_dl, val_dl, test_dl, criterion, prune_percent=None, iterations=None):
+        """
+        Script for performing the model pruning iteratively using pytorch-ignite engines.
+        The script runs the following steps:
+        1. calculate the number of filters to prune in each iteration
+        2. evaluate the model's performance on the test set using evaluation engine
+        3. rank the neurons of the prunable layer based on the pruner strategy and the validation set if needed
+        4. create a smaller model without the redundant neurons and saves it's configuration
+        5. evaluate the new model's performance on the test set using evaluation engine
+        6. fine tune the weights using the training set using fine tuning engine
+        7. repeat steps 2-6 for the given number of iterations
+        8. log performance of all metrics, both basic metrics and user added ones
 
+        Args:
+            train_dl: Data loader for the training set.
+            val_dl: Data loader for the validation set.
+            test_dl: Data loader for the test set.
+            criterion: Loss function used in the fine tuning step.
+            prune_percent: percent of prunable neurons to remove in each iteration.
+            iterations: number of pruning iterations
+        """
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
         self.metrics_list = []
@@ -208,10 +228,35 @@ class Bonsai:
         log_performance(self.metrics_list, self.writer)
 
     def attach_handler_to_eval(self, event: Events, handler: Callable, *args, **kwargs):
+        """
+        Function for adding ignite handlers to evaluation engine.
+
+        Args:
+            event: ignite engine event that marks when should the handler be called
+            handler: a handler function to be attached to the evaluation engine
+            args: handler function arguments
+            kwargs: handler function keyword arguments
+        """
         self._eval_handlers.append({"event_name": event, "handler": handler, "args": args, "kwargs": kwargs})
 
     def attach_handler_to_finetune(self, event: Events, handler: Callable, *args, **kwargs):
+        """
+        Function for adding ignite handlers to fine tuning engine.
+
+        Args:
+            event: ignite engine event that marks when should the handler be called
+            handler: a handler function to be attached to the fine tuning engine
+            args: handler function arguments
+            kwargs: handler function keyword arguments
+        """
         self._finetune_handlers.append({"event_name": event, "handler": handler, "args": args, "kwargs": kwargs})
 
     def attach_metric_to_eval(self, metric_name: str, metric: Metric):
+        """
+        Function for adding ignite metrics to the evaluation engine
+
+        Args:
+            metric_name: name of attached metric
+            metric: metric attached to engine
+        """
         self._metrics[metric_name] = metric

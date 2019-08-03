@@ -1,7 +1,7 @@
 import torch
 from ignite.engine.engine import Engine
 from ignite.utils import convert_tensor
-from bonsai.pruning.abstract_prunners import AbstractPrunner, GradBasedPrunner
+from bonsai.pruning.abstract_pruners import AbstractPrunner, GradBasedPrunner
 # import logging
 #
 # logging.basicConfig(level=logging.DEBUG)

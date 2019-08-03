@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from bonsai.pruning.abstract_prunners import WeightBasedPrunner, ActivationBasedPrunner, GradBasedPrunner
+from bonsai.pruning.abstract_pruners import WeightBasedPrunner, ActivationBasedPrunner, GradBasedPrunner
 
 
 class WeightL2Prunner(WeightBasedPrunner):
