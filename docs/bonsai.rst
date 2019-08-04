@@ -1,7 +1,7 @@
 bonsai
 ==============
 
-.. currentmodule:: bonsai.__init__
+.. currentmodule:: bonsai.main
 
 .. autoclass:: Bonsai
    :members:

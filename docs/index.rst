@@ -34,7 +34,8 @@ You can clone the source from `github <https://github.com/ItamarWilf/pytorch-bon
    :caption: Contents:
 
    bonsai
+   pruners
 
-* :ref:'genindex'
-* :ref:'modindex'
-* :ref:'search'
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

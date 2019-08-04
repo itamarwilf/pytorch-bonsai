@@ -2,7 +2,7 @@ import pytest
 import torch
 import os
 from bonsai import Bonsai
-from bonsai.pruning.bonsai_pruners import WeightL2Prunner, ActivationL2Prunner, TaylorExpansionPrunner
+from bonsai.pruning import WeightL2Prunner, ActivationL2Prunner, TaylorExpansionPrunner
 import requests
 
 CHUNK_SIZE = 32768

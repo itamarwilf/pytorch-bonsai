@@ -12,7 +12,7 @@ from bonsai import Bonsai
 from bonsai.config import config
 from bonsai.modules.bonsai_parser import model_to_cfg_w_routing
 from bonsai.modules.model_cfg_parser import write_pruned_config
-from bonsai.pruning.bonsai_pruners import WeightL2Prunner
+from bonsai.pruning import WeightL2Prunner
 from u_net import UNet
 
 NUM_TRAIN = 32

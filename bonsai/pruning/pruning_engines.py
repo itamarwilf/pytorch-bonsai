@@ -1,7 +1,7 @@
 import torch
 from ignite.engine.engine import Engine
 from ignite.utils import convert_tensor
-from bonsai.pruning.abstract_pruners import AbstractPrunner, GradBasedPrunner
+from bonsai.pruning.abstract_pruners import AbstractPruner, GradBasedPruner
 # import logging
 #
 # logging.basicConfig(level=logging.DEBUG)
@@ -98,11 +98,11 @@ def create_supervised_evaluator(model, metrics={},
 
 
 # TODO needs documentation
-def create_supervised_ranker(model, prunner: AbstractPrunner, loss_fn,
+def create_supervised_ranker(model, prunner: AbstractPruner, loss_fn,
                              device=None, non_blocking=True,
                              prepare_batch=_prepare_batch):
     """
-    Factory function for creating a trainer for supervised models
+    Factory function for creating a ranker for supervised models
 
     Args:
         model (`torch.nn.Module`): the model to train
@@ -126,7 +126,7 @@ def create_supervised_ranker(model, prunner: AbstractPrunner, loss_fn,
         x, y = prepare_batch(batch, device, non_blocking=non_blocking)
         y_pred = model(x)
         loss = loss_fn(y_pred[0], y)
-        if isinstance(prunner, GradBasedPrunner):
+        if isinstance(prunner, GradBasedPruner):
             loss.backward()
         return loss.item()
 
