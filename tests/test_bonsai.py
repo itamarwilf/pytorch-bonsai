@@ -99,6 +99,8 @@ class TestEval:
 class TestBonsaiFinetune:
 
     def test_bonsai_finetune(self, vgg19_with_weights_prunner, train_dl, val_dl, criterion, out_path):
+        from ignite.metrics import Loss
+        vgg19_with_weights_prunner._metrics["loss"] = Loss(criterion)
         vgg19_with_weights_prunner._finetune(train_dl, val_dl, criterion, 0)
 
 
