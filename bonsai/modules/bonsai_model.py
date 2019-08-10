@@ -11,6 +11,14 @@ from bonsai.modules.model_cfg_parser import basic_model_cfg_parsing
 
 
 class BonsaiModel(torch.nn.Module):
+    """
+    a model made of wrappers to pytorch modules. It functions as a regular nn.Module, but it can also be used for
+    propagating pruning instructions between different modules.
+
+    Args:
+        cfg_path (str): a path to the model config file, look at example models for reference.
+        bonsai : the model's parent Bonsai object
+    """
 
     def __init__(self, cfg_path, bonsai=None):
         super(BonsaiModel, self).__init__()
@@ -38,6 +46,9 @@ class BonsaiModel(torch.nn.Module):
         return super().__call__(*args, **kwargs)
 
     def get_bonsai(self):
+        """
+        Returns: the model's parent Bonsai object
+        """
         return self.bonsai()
 
     def _reset_forward(self):
@@ -46,6 +57,14 @@ class BonsaiModel(torch.nn.Module):
         self.layer_outputs = []
 
     def forward(self, x):
+        """
+        runs model on given tensor
+        Args:
+            x: tensor to run the model on
+
+        Returns:
+            model's output
+        """
 
         self._reset_forward()
 
@@ -60,6 +79,14 @@ class BonsaiModel(torch.nn.Module):
         return output
 
     def _create_bonsai_modules(self) -> nn.ModuleList:
+        """
+        Iterates over given module configs from the model config file.
+        Calculates the number of channels/features going into each module for automatic model building.
+
+        Returns:
+            torch.nn.ModuleList containing all the modules of the model
+
+        """
         module_list = nn.ModuleList()
         # number of input channels for next layer is taken from prev layer output channels (or model input)
         in_h = self.hyperparams.get("height")
@@ -88,6 +115,9 @@ class BonsaiModel(torch.nn.Module):
 
     # TODO - add docstring
     def total_prunable_filters(self):
+        """
+        Returns: number of prunable channels + features in the model
+        """
         filters = 0
         for module in self.module_list:
             if isinstance(module, Prunable):
@@ -98,19 +128,33 @@ class BonsaiModel(torch.nn.Module):
         return filters
 
     # TODO - add docstring
-    def propagate_pruning_targets(self, inital_pruning_targets):
+    def propagate_pruning_targets(self, initial_pruning_targets):
+        """
+        Propagates each layer pruning targets across entire model to account for all place where this pruning has any
+        effect on the model, such as pruning input channels to another layer,
 
+        Args:
+            initial_pruning_targets: dictionary with layer index as key and list of channels/feature indices that needs
+            to be pruned at that layer
+
+        Returns: None
+
+        """
         self.pruning_targets = [list(range(self.output_channels[0]))]
 
         for i, module in enumerate(self.module_list):
-            module_pruing_targets = None
-            if i in inital_pruning_targets.keys():
-                module_pruing_targets = inital_pruning_targets[i]
-            current_target = module.propagate_pruning_target(module_pruing_targets)
+            module_pruning_targets = None
+            if i in initial_pruning_targets.keys():
+                module_pruning_targets = initial_pruning_targets[i]
+            current_target = module.propagate_pruning_target(module_pruning_targets)
 
             if current_target is None:
                 current_target = []
             self.pruning_targets.append(current_target)
 
     def calc_receptive_field(self):
+        """
+        calculates convolutions receptive field at each layer of the model
+        Returns: None
+        """
         calc_receptive_field(self.module_cfgs)
