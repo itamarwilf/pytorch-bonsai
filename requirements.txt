@@ -8,5 +8,6 @@ seaborn
 tensorflow
 tensorboard
 Pillow
+pyyaml
 torch>=1.1.0
 tqdm
