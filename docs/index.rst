@@ -37,5 +37,4 @@ You can clone the source from `github <https://github.com/ItamarWilf/pytorch-bon
    pruners
 
 * :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`
