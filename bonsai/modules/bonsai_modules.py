@@ -231,7 +231,7 @@ class BRoute(BonsaiModule):
         bonsai_model.output_channels.append(out_channels)
 
     def forward(self, layer_input):
-        return torch.cat(tuple(self.get_model().layer_outputs[i] for i in self.module_cfg["layers"]), dim=1)
+        return torch.cat(tuple(self.get_model().output_manager[i] for i in self.module_cfg["layers"]), dim=1)
 
     def calc_layer_output_size(self, input_size):
         prev_layers_output_sizes = [self.get_model().output_sizes[i] for i in self.module_cfg["layers"]]
@@ -362,17 +362,20 @@ class BAvgPool2d(BonsaiModule):
         return self.get_model().pruning_targets[-1]
 
 
-class BGlobalAvgPool2d(BonsaiModule):
+class BGlobalAvgPool(BonsaiModule):
 
     def __init__(self, bonsai_model: nn.Module, module_cfg: Dict[str, Any]):
         super().__init__(bonsai_model, module_cfg)
+        self.avgpool = call_constructor_with_cfg(nn.AdaptiveAvgPool2d, self.module_cfg)
+        # since max pooling doesn't change the tensor's number of channels, re append previous output channels
+        bonsai_model.output_channels.append(bonsai_model.output_channels[-1])
 
     def calc_layer_output_size(self, input_size):
         in_c, _, _ = input_size
         return in_c, 1, 1
 
     def forward(self, layer_input):
-        torch.mean(layer_input, dim=(2, 3))
+        return self.avgpool(layer_input)
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
@@ -540,9 +543,9 @@ class BElementwiseAdd(Elementwise):
 
     def forward(self, layer_input):
         layers = self.module_cfg["layers"]
-        output = self.get_model().layer_outputs[layers[0]]
+        output = self.get_model().output_manager[layers[0]]
         for layer in layers[1:]:
-            output += self.get_model().layer_outputs[layer]
+            output += self.get_model().output_manager[layer]
         if self.f:
             output = self.f(output)
         return output
