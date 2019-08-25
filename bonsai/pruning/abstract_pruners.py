@@ -5,39 +5,62 @@ from typing import Iterator
 from bonsai.modules.abstract_bonsai_classes import Prunable, Elementwise, BonsaiModule
 
 
-class AbstractPrunner:
+class AbstractPruner:
+    """
+    Basic class for greedy neuron ranking for model pruning.
+    It implements all needed methods for ranking and pruning all the prunable neurons in the model:
+        1. sets up the hooks for layer rank calculation.
+        2. calculates the prunable layer ranks.
+        3. optional - normalize each layer ranks by their L2 norm, as seen in `Pruning Convolutional Neural Networks for Resource Efficient Inference <https://arxiv.org/abs/1611.06440>`_.
+        4. equalizes the ranks of elementwise operations (such as residual connections) using algebraic mean.
+        5. sorts all prunable neurons in the model by rank and returns which neurons should be pruned
+        6. inverse pruning targets for implementation (which neurons to keep for each layer)
+    """
 
     def __init__(self, bonsai, normalize=False):
+        """
+        Initializes the pruner.
+
+        Args:
+            bonsai (bonsai.main.Bonsai): The Bonsai object using the pruner. We hold a weak ref to it
+            normalize (bool): whether to perform layer ranks normalization
+        """
         self.bonsai = weakref.ref(bonsai)
         self.normalize = normalize
         self.pruning_residual = 0
 
-    def get_bonsai(self):
+    def _get_bonsai(self):
         return self.bonsai()
 
-    def prunable_modules_iterator(self) -> Iterator:
+    def _prunable_modules_iterator(self) -> Iterator:
         """
         :return: iterator over module list filtered for prunable modules. holds tuples of (module index, module)
         """
-        enumerator = enumerate(self.get_bonsai().model.module_list)
+        enumerator = enumerate(self._get_bonsai().model.module_list)
         return filter(lambda x: isinstance(x[1], Prunable), enumerator)
 
-    def elementwise_modules_iterator(self):
+    def _elementwise_modules_iterator(self):
         """
         Returns: iterator over module list filtered for elementwise modules. holds tuple of (module index, module)
         """
-        enumerator = enumerate(self.get_bonsai().model.module_list)
+        enumerator = enumerate(self._get_bonsai().model.module_list)
         return filter(lambda x: isinstance(x[1], Elementwise), enumerator)
 
     def set_up(self):
-        for _, module in self.prunable_modules_iterator():
+        """
+        sets up the pruner for rank calculation by getting layers weights in desired shape (output x input x ...)
+        """
+        for _, module in self._prunable_modules_iterator():
             module.weights = module.get_weights()
 
     def reset(self):
-        for _, module in self.prunable_modules_iterator():
+        """
+        resets all prunable layer ranks
+        """
+        for _, module in self._prunable_modules_iterator():
             module.reset()
 
-    def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
+    def _attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         """
         attaches hooks for needed actions during forward / backward pass of prunable modules
         :return: None
@@ -45,17 +68,22 @@ class AbstractPrunner:
         raise NotImplementedError
 
     @staticmethod
-    def _compute_single_layer_ranks(module, *args, **kwargs):
+    def compute_single_layer_ranks(module, *args, **kwargs):
         """
-        function that computes the rank of filters in conv2d and deconv2d layers for pruning.
-        this function wil be called for prunable modules during prunning process
-        :return:
+        method for calculating the rank of a single layer based on weights and activations and gradients if calculated.
+
+        Args:
+            module (bonsai.modules.Prunable): the target module for ranking
+            *args: arguments needed for computation
+            **kwargs: keyword arguments needed for computation
+
+        Returns (torch.Tensor): calculated ranks in the shape (num_of_prunable_parameters,)
         """
         raise NotImplementedError
 
-    def compute_model_ranks(self, engine=None):
-        for _, module in self.prunable_modules_iterator():
-            layer_current_ranks = self._compute_single_layer_ranks(module)
+    def compute_model_ranks(self, _=None):
+        for _, module in self._prunable_modules_iterator():
+            layer_current_ranks = self.compute_single_layer_ranks(module)
             module.ranking += layer_current_ranks.cpu()
 
     @staticmethod
@@ -70,7 +98,7 @@ class AbstractPrunner:
         module.ranking = v
 
     def normalize_ranks(self):
-        for _, module in self.prunable_modules_iterator():
+        for _, module in self._prunable_modules_iterator():
             self._normalize_filter_ranks_per_layer(module)
 
     def _recursive_find_prunables_modules(self, base_module: BonsaiModule, module_idx: int) -> list:
@@ -93,7 +121,7 @@ class AbstractPrunner:
 
         if base_module.module_cfg.get("layers"):
             for layer_idx in base_module.module_cfg["layers"]:
-                layer = self.get_bonsai().model.module_list[module_idx + layer_idx]
+                layer = self._get_bonsai().model.module_list[module_idx + layer_idx]
                 prunable_modules += \
                     self._recursive_find_prunables_modules(layer, module_idx + layer_idx)
         else:
@@ -102,7 +130,7 @@ class AbstractPrunner:
             else:
                 new_idx = module_idx - 1
                 prunable_modules += \
-                    self._recursive_find_prunables_modules(self.get_bonsai().model.module_list[new_idx], new_idx)
+                    self._recursive_find_prunables_modules(self._get_bonsai().model.module_list[new_idx], new_idx)
 
         return prunable_modules
 
@@ -123,10 +151,10 @@ class AbstractPrunner:
             prunable_module.ranking = new_ranks
 
     def equalize_elementwise(self):
-        for module_idx, module in self.elementwise_modules_iterator():
+        for module_idx, module in self._elementwise_modules_iterator():
             self._equalize_single_elementwise(module, module_idx)
 
-    def lowest_ranking_filters(self, num_filters_to_prune):
+    def _lowest_ranking_filters(self, num_filters_to_prune):
         """
         Iterates over prunable modules for module index, filter index and filter ranks.
         In order to handle pruning of elementwise modules, pruning should be done simou
@@ -139,7 +167,7 @@ class AbstractPrunner:
         """
         print("pruning residual", self.pruning_residual)
         data = []
-        for i, module in self.prunable_modules_iterator():
+        for i, module in self._prunable_modules_iterator():
             for j, rank in enumerate(module.ranking):
                 data.append((i, j, rank))
         data = sorted(data, key=lambda x: x[2])
@@ -153,7 +181,7 @@ class AbstractPrunner:
         return data[:current_num_filters_to_prune]
 
     def get_prunning_plan(self, num_filters_to_prune):
-        filters_to_prune = self.lowest_ranking_filters(num_filters_to_prune)
+        filters_to_prune = self._lowest_ranking_filters(num_filters_to_prune)
 
         # After each of the k filters are prunned,
         # the filter index of the next filters change since the model is smaller.
@@ -169,44 +197,56 @@ class AbstractPrunner:
         return filters_to_prune_per_layer
 
     def inverse_pruning_targets(self, pruning_targets):
-        for i, module in self.prunable_modules_iterator():
+        for i, module in self._prunable_modules_iterator():
             if i in pruning_targets.keys():
                 pruning_targets[i] = [x for x in range(len(module.ranking)) if x not in pruning_targets[i]]
         return pruning_targets
 
 
-class WeightBasedPrunner(AbstractPrunner):
+class WeightBasedPruner(AbstractPruner):
+    """
+    basic class for pruners that rank layers only based on the layer weights and requires no data or forward/backward
+    operations for ranking the neurons
+    """
 
     def __init__(self, bonsai, normalize=False):
         super().__init__(bonsai, normalize)
 
-    def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
+    def _attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         pass
 
     @staticmethod
-    def _compute_single_layer_ranks(module, *args, **kwargs):
+    def compute_single_layer_ranks(module, *args, **kwargs):
         raise NotImplementedError
 
 
-class ActivationBasedPrunner(AbstractPrunner):
+class ActivationBasedPruner(AbstractPruner):
+    """
+    basic class for pruners that rank layers based on the layer weights and activations with respect to given data and
+     requires only forward of the model for ranking the neurons
+    """
 
     def __init__(self, bonsai, normalize=False):
         super().__init__(bonsai, normalize)
 
-    def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
+    def _attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         module.activation = x
 
     @staticmethod
-    def _compute_single_layer_ranks(module, *args, **kwargs):
+    def compute_single_layer_ranks(module, *args, **kwargs):
         raise NotImplementedError
 
 
-class GradBasedPrunner(AbstractPrunner):
+class GradBasedPruner(AbstractPruner):
+    """
+    basic class for pruners that rank layers based on the layer weights, activations and gradients with respect to given
+    data and requires both forward and backward pass of the model for ranking the neurons
+    """
 
     def __init__(self, bonsai, normalize=False):
         super().__init__(bonsai, normalize)
 
-    def attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
+    def _attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
         module.activation = x
         x.register_hook(lambda grad: self._store_grad_in_module(module, grad))
 
@@ -215,5 +255,5 @@ class GradBasedPrunner(AbstractPrunner):
         module.grad = grad
 
     @staticmethod
-    def _compute_single_layer_ranks(module, *args, **kwargs):
+    def compute_single_layer_ranks(module, *args, **kwargs):
         raise NotImplementedError

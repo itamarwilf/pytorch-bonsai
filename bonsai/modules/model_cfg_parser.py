@@ -1,3 +1,7 @@
+"""
+Utils for reading, parsing and writing model configuration files. Used for writing the pruned models instructions
+"""
+
 from typing import List
 from bonsai.modules.errors import ModuleConfigError
 
@@ -49,6 +53,13 @@ def _convert_module_cfg_value(val: str):
 
 # TODO - add more checks regarding linear layer
 def validate_model_cfg(model_cfg: List[dict]) -> None:
+    """
+    validates that the given model configuration can be constructed an is not missing information
+    Args:
+        model_cfg: list of dictionaries containing modules parameters
+
+    Returns: None
+    """
     hyper_params = model_cfg.pop(0)
 
     height = hyper_params.get("height")
@@ -67,7 +78,16 @@ def validate_model_cfg(model_cfg: List[dict]) -> None:
                 raise ModuleConfigError("'conv2d' or similar layer after 'linear' or 'flatten' is not supported yet")
 
 
-def write_pruned_config(full_cfg, output_path, pruning_targets):
+def write_pruned_config(full_cfg: List[dict], output_path: str, pruning_targets: dict):
+    """
+    After each pruning stage, write the pruned model configuration so it could be used for next iteration or by user.
+    Args:
+        full_cfg: The old model configuration.
+        output_path: where to write the new model's configuration
+        pruning_targets: dictionary with the current iterations pruning targets.
+
+    Returns: None
+    """
     write_layer_num = False
     with open(output_path, 'w')as f:
         for i, block in enumerate(full_cfg):
