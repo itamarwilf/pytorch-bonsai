@@ -49,9 +49,12 @@ def create_supervised_trainer(model, optimizer, loss_fn,
         optimizer.zero_grad()
         x, y = prepare_batch(batch, device=device, non_blocking=non_blocking)
         y_pred = model(x)
-        # TODO - needs handling of loss of multiple outputs
-        # for pred in y_pred:
-        loss = loss_fn(y_pred[0], y)
+        if isinstance(loss_fn, list):
+            assert len(y_pred) == len(y) == len(loss_fn), \
+                "If loss_fn is a list, its length should match the number of outputs and labels"
+            loss = sum(loss_fn[i](y_pred[i], y[i]) for i in range(len(loss_fn)))
+        else:
+            loss = sum([loss_fn(y_pred[i], y) for i in range(len(y_pred))])
         loss.backward()
         optimizer.step()
         return output_transform(x, y, y_pred, loss)
@@ -68,7 +71,6 @@ def create_supervised_evaluator(model, metrics={},
 
     Args:
         model (`torch.nn.Module`): the model to train.
-        loss_fn (torch.nn loss function): the loss function to use.
         metrics (dict of str - :class:`~ignite.metrics.Metric`): a map of metric names to Metrics.
         device (str, optional): device type specification (default: None).
             Applies to both model and batches.
@@ -92,8 +94,7 @@ def create_supervised_evaluator(model, metrics={},
         model.eval()
         with torch.no_grad():
             x, y = prepare_batch(batch, device=device, non_blocking=non_blocking)
-            # TODO - the '[0]' is used for support of multiple network outputs, needs fixing of engine
-            y_pred = model(x)[0]
+            y_pred = model(x)
             return output_transform(x, y, y_pred)
 
     engine = Engine(_inference)
@@ -135,7 +136,13 @@ def create_supervised_ranker(model, prunner: AbstractPrunner, loss_fn,
         model.train()
         x, y = prepare_batch(batch, device, non_blocking=non_blocking)
         y_pred = model(x)
-        loss = loss_fn(y_pred[0], y)
+        if isinstance(loss_fn, list):
+            assert len(y_pred) == len(y) == len(loss_fn), \
+                "If loss_fn is a list, its length should match the number of outputs and labels"
+            loss = sum(loss_fn[i](y_pred[i], y[i]) for i in range(len(loss_fn)))
+        else:
+            loss = sum([loss_fn(y_pred[i], y) for i in range(len(y_pred))])
+
         if isinstance(prunner, GradBasedPrunner):
             loss.backward()
         return output_transform(x, y, y_pred, loss)

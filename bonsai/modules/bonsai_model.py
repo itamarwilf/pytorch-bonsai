@@ -19,6 +19,7 @@ class BonsaiModel(torch.nn.Module):
             self.bonsai = weakref.ref(bonsai)
         self.device = None
 
+        # TODO - remove output_channels and replace with output_sizes everywhere
         self.output_channels: List[int] = []
         self.output_sizes: List = []
 

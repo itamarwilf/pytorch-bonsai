@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from ignite.engine import Events
 from ignite.handlers import TerminateOnNan, ModelCheckpoint, EarlyStopping
-from ignite.metrics import Loss, Metric
+from ignite.metrics import Metric
 from torch.utils.tensorboard import SummaryWriter
 from bonsai.utils.progress_bar import Progbar
 from bonsai.utils.performance_utils import log_performance
@@ -15,7 +15,8 @@ from bonsai.pruning.abstract_prunners import AbstractPrunner, WeightBasedPrunner
 from bonsai.pruning.optimizer_factory import optimizer_constructor_from_config
 from bonsai.pruning.pruning_engines import create_supervised_ranker, create_supervised_trainer, \
     create_supervised_evaluator
-from bonsai.utils.engine_hooks import log_training_loss, run_evaluator, log_evaluator_metrics, calc_model_speed
+from bonsai.utils.engine_hooks import log_training_loss, run_evaluator, log_evaluator_metrics, calc_model_speed, \
+    BonsaiLoss
 
 
 class Bonsai:
@@ -177,7 +178,7 @@ class Bonsai:
         if self.prunner is None:
             raise ValueError("you need a prunner object in the Bonsai model to run pruning")
         self.metrics_list = []
-        self._metrics["loss"] = Loss(criterion)
+        self._metrics["loss"] = BonsaiLoss(criterion)
 
         if prune_percent is None:
             prune_percent = config["pruning"]["prune_percent"].get()
