@@ -101,8 +101,8 @@ class TestEval:
 class TestBonsaiFinetune:
 
     def test_bonsai_finetune(self, vgg19_with_weights_prunner, train_dl, val_dl, criterion, out_path):
-        from ignite.metrics import Loss
-        vgg19_with_weights_prunner._metrics["loss"] = Loss(criterion)
+        from bonsai.utils.engine_hooks import BonsaiLoss
+        vgg19_with_weights_prunner._metrics["loss"] = BonsaiLoss(criterion)
         vgg19_with_weights_prunner._finetune(train_dl, val_dl, criterion, 0)
 
 
@@ -129,19 +129,25 @@ class TestWriteRecipe:
 
 class TestFullPrune:
 
-    def test_run_pruning_fcn_vgg16(self, fcn_vgg16_with_activation_prunner, train_dl, val_dl, test_dl, criterion,
+    def test_run_pruning_fcn_vgg16(self, fcn_vgg16_with_weight_l2_prunner, train_dl, val_dl, test_dl, criterion,
                                    logdir, out_path):
-        fcn_vgg16_with_activation_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
-                                                      criterion=criterion, iterations=3)
+        fcn_vgg16_with_weight_l2_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
+                                                     criterion=criterion, iterations=3)
 
     def test_run_pruning_vgg19(self, vgg19_with_grad_prunner, train_dl, val_dl, test_dl, criterion, logdir, out_path):
         vgg19_with_grad_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl, criterion=criterion,
                                             iterations=9)
 
-    def test_run_pruning_resnet18(self, resnet18_with_weight_l2_prunner, train_dl, val_dl, test_dl, criterion, logdir,
-                                  out_path):
-        resnet18_with_weight_l2_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
-                                                    criterion=criterion, prune_percent=0.05, iterations=5)
+    def test_run_pruning_resnet18(self, resnet18_with_activation_l2_prunner, train_dl, val_dl, test_dl, criterion,
+                                  logdir, out_path):
+        resnet18_with_activation_l2_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
+                                                        criterion=criterion, prune_percent=0.1, iterations=8)
+
+    def test_run_pruning_resnet18_new_bn(self, resnet18_new_bn_with_activation_l2_prunner, train_dl, val_dl, test_dl,
+                                         criterion, logdir, out_path):
+        resnet18_new_bn_with_activation_l2_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
+                                                               criterion=criterion, prune_percent=0.1, iterations=8)
+
 
 class TestConfigurationFileParser:
 
@@ -164,4 +170,3 @@ class TestConfigurationFileParser:
             bonsai_parsed_model = bonsai_parser(resnet50, resnet_in)
             bonsai_parsed_model.summary()  # prints model cfg summary
             bonsai_parsed_model.save_cfg('example_models/configs/resnet50_from_pytorch.cfg')
-

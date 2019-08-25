@@ -1,6 +1,6 @@
 import copy
 import weakref
-from collections import Counter
+from collections import Counter, OrderedDict
 from typing import List
 import torch
 from torch import nn
@@ -27,10 +27,11 @@ class BonsaiModel(torch.nn.Module):
             self.bonsai = weakref.ref(bonsai)
         self.device = None
 
+        # TODO - remove output_channels and replace with output_sizes everywhere
         self.output_channels: List[int] = []
         self.output_sizes: List = []
 
-        self.layer_outputs: List[torch.Tensor] = []
+        # self.layer_outputs: List[torch.Tensor] = []
         self.model_output = []
 
         self.pruning_targets = []
@@ -40,7 +41,9 @@ class BonsaiModel(torch.nn.Module):
         self.module_cfgs = copy.deepcopy(self.full_cfg)
         self.hyperparams = self.module_cfgs.pop(0)  # type: dict
 
-        self.module_list = self._create_bonsai_modules()  # type: nn.ModuleList
+        self.module_list: nn.ModuleList = self._create_bonsai_modules()
+
+        self.output_manager = self._create_output_manager()
 
     def __call__(self, *args, **kwargs):
         return super().__call__(*args, **kwargs)
@@ -51,31 +54,35 @@ class BonsaiModel(torch.nn.Module):
         """
         return self.bonsai()
 
-    def _reset_forward(self):
-
-        self.model_output = []
-        self.layer_outputs = []
-
-    def forward(self, x):
+    def forward(self, model_input):
         """
         runs model on given tensor
         Args:
-            x: tensor to run the model on
+            model_input: tensor or list of tensors to run the model on
 
         Returns:
             model's output
         """
 
-        self._reset_forward()
+        if isinstance(model_input, list):
+            x = None
+        elif isinstance(model_input, torch.Tensor):
+            x = model_input
+        else:
+            raise TypeError(f"Model input must be torch.Tensor or List[torch.Tensor], got {type(model_input)}")
+
+        output = []
+        self.output_manager.reset()
 
         for i, module in enumerate(self.module_list):
-            x = module(x)
-            self.layer_outputs.append(x)
+            if "input" in module.module_cfg.keys():
+                x = module(model_input[module.module_cfg["input"]])
+            else:
+                x = module(x)
+            self.output_manager[module.module_cfg["name"]] = x
             if module.module_cfg.get("output"):
-                self.model_output.append(x)
-
-        output = self.model_output
-        self._reset_forward()
+                output.append(x)
+        self.output_manager.reset()
         return output
 
     def _create_bonsai_modules(self) -> nn.ModuleList:
@@ -96,12 +103,13 @@ class BonsaiModel(torch.nn.Module):
         self.output_sizes.append((in_c, in_h, in_w))
         counter = Counter()
         # iterate over module definitions to create and add modules to bonsai model
-        for module_cfg in self.module_cfgs:
+        for layer_num, module_cfg in enumerate(self.module_cfgs):
             # TODO - maybe take names from original parsed model after jit traced parsing is implemented
             module_type = module_cfg['type']
             counter[module_type] += 1
-            module_name = module_type + "_" + str(counter[module_type])
-            module_cfg["name"] = module_name
+            if not module_cfg.get("name"):
+                module_name = module_type + "_" + str(counter[module_type])
+                module_cfg["name"] = module_name
 
             # get the module creator based on type
             module_creator = BonsaiFactory.get_creator(module_type)
@@ -113,7 +121,6 @@ class BonsaiModel(torch.nn.Module):
             module_list.append(module)
         return module_list
 
-    # TODO - add docstring
     def total_prunable_filters(self):
         """
         Returns: number of prunable channels + features in the model
@@ -127,7 +134,6 @@ class BonsaiModel(torch.nn.Module):
                     filters += int(module.module_cfg.get("out_features"))
         return filters
 
-    # TODO - add docstring
     def propagate_pruning_targets(self, initial_pruning_targets):
         """
         Propagates each layer pruning targets across entire model to account for all place where this pruning has any
@@ -158,3 +164,61 @@ class BonsaiModel(torch.nn.Module):
         Returns: None
         """
         calc_receptive_field(self.module_cfgs)
+
+    def _create_output_manager(self):
+        """
+        static analysis of layers, counting the number of times a layer output is used for memory management
+        Returns:
+
+
+        """
+        counter = OrderedDict()
+        for module_config in self.module_cfgs:
+
+            if module_config["name"] in counter.keys():
+                counter[module_config["name"]] += 1
+            else:
+                counter[module_config["name"]] = 1
+
+            if "input" in module_config.keys():
+                if isinstance(module_config["input"], int):
+                    name = list(counter.keys())[module_config["input"]]
+                    counter[name] += 1
+                elif isinstance(module_config["input"], str):
+                    counter[module_config["input"]] += 1
+
+            if module_config.get("layers"):
+                for layer in module_config.get("layers"):
+                    if isinstance(layer, int):
+                        name = list(counter.keys())[layer]
+                        counter[name] += 1
+                    elif isinstance(layer, str):
+                        counter[module_config["input"]] += 1
+
+        return _OutputManager(counter)
+
+
+class _OutputManager:
+
+    def __init__(self, init_counter: OrderedDict):
+        self.init_counter = init_counter
+        self.counter = copy.deepcopy(self.init_counter)
+        self.outputs = OrderedDict()
+
+    def __setitem__(self, key, value):
+        # if isinstance(key, int):
+        #     key = list(self.outputs.keys())[key]
+        self.outputs[key] = value
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            item = list(self.outputs.keys())[item]
+        value = self.outputs[item]
+        self.counter[item] -= 1
+        if self.counter[item] == 0:
+            self.outputs[item] = None
+        return value
+
+    def reset(self):
+        self.counter = copy.deepcopy(self.init_counter)
+        self.outputs = OrderedDict()
