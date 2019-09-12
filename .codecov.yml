@@ -1,0 +1,17 @@
+gitlab_enterprise:
+  url: "https://codecov-enterprise-hostname.com/login/gitlab_enterprise"
+  client_id: "8766ca35e28c06450375ceebf6174cae881d05ab19530c73299de8e8e7a02f82"
+  client_secret: "f7c1ab43af801964ea573a6e0cdf371d5020f123e960cc0efb4122e91cf79d37"
+coverage:
+  precision: 0
+  round: down
+  status:
+    project:
+      default:
+        threshold: 3%
+    changes: false
+#comment: false
+ignore:
+  - "tests/"
+  - "setup.py"
+  - "u_net.py"

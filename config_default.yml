@@ -1,0 +1,17 @@
+evaluate:
+  eval_speed: 5
+logging:
+  logdir: runs
+  train_log_interval: 1
+  use_tensorboard: 'yes'
+optimizer:
+  lr: 0.0001
+  momentum: 0.9
+  type: Adam
+pruning:
+  early_stopping: true
+  finetune_epochs: 3
+  num_iterations: 9
+  out_path: pruning_results
+  patience: 2
+  prune_percent: 0.1
