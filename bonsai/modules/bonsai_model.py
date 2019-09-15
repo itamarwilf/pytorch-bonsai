@@ -175,10 +175,11 @@ class BonsaiModel(torch.nn.Module):
         counter = OrderedDict()
         for module_config in self.module_cfgs:
 
-            if module_config["name"] in counter.keys():
-                counter[module_config["name"]] += 1
-            else:
-                counter[module_config["name"]] = 1
+            # TODO - part of hack
+            # if module_config["name"] in counter.keys():
+            #     counter[module_config["name"]] += 1
+            # else:
+            counter[module_config["name"]] = 0
 
             if "input" in module_config.keys():
                 if isinstance(module_config["input"], int):
@@ -190,10 +191,10 @@ class BonsaiModel(torch.nn.Module):
             if module_config.get("layers"):
                 for layer in module_config.get("layers"):
                     if isinstance(layer, int):
-                        name = list(counter.keys())[layer]
+                        name = list(counter.keys())[layer - 1]
                         counter[name] += 1
                     elif isinstance(layer, str):
-                        counter[module_config["input"]] += 1
+                        counter[layer] += 1
 
         return _OutputManager(counter)
 
@@ -208,7 +209,11 @@ class _OutputManager:
     def __setitem__(self, key, value):
         # if isinstance(key, int):
         #     key = list(self.outputs.keys())[key]
-        self.outputs[key] = value
+        if self.counter[key] > 0:
+            self.outputs[key] = value
+        # TODO - hack for maintaining correct list len
+        else:
+            self.outputs[key] = None
 
     def __getitem__(self, item):
         if isinstance(item, int):
