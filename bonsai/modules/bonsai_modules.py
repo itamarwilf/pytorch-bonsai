@@ -17,7 +17,6 @@ def conv_layer_output_size(module_cfg, in_h, in_w):
 
 
 # region conv2d
-
 class AbstractBConv2d(BonsaiModule):
 
     def __init__(self, bonsai_model, module_cfg: Dict[str, Any]):

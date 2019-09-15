@@ -36,4 +36,4 @@ class TaylorExpansionPrunner(GradBasedPruner):
         ranks = ranks.contiguous().view(size[0], np.prod(size[1:]))
         ranks = torch.mean(ranks, dim=1)
 
-        return ranks
+        return ranks.cpu()

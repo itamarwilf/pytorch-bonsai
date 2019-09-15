@@ -48,6 +48,13 @@ def _convert_module_cfg_value(val: str):
             pass
     if len(val) == 1:
         return val[0]
+    try:
+        if val == "False":
+            return False
+        elif val == "True":
+            return True
+    except ValueError:
+        raise ValueError
     return val
 
 
