@@ -14,4 +14,3 @@ coverage:
 ignore:
   - "tests/"
   - "setup.py"
-  - "u_net.py"
