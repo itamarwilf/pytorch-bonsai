@@ -196,7 +196,7 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
         x = self.deconv2d(layer_input)
 
         if self.get_model().to_rank:
-            self.get_model().bonsai.prunner._attach_hooks_for_rank_calculation(self, x)
+            self.get_model().get_bonsai().prunner._attach_hooks_for_rank_calculation(self, x)
 
         if self.bn is not None:
             x = self.bn(x)

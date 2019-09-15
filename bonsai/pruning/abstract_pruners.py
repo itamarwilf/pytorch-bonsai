@@ -230,7 +230,7 @@ class ActivationBasedPruner(AbstractPruner):
         super().__init__(bonsai, normalize)
 
     def _attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
-        module.activation = x
+        module.activation = x.detach()
 
     @staticmethod
     def compute_single_layer_ranks(module, *args, **kwargs):
@@ -247,12 +247,12 @@ class GradBasedPruner(AbstractPruner):
         super().__init__(bonsai, normalize)
 
     def _attach_hooks_for_rank_calculation(self, module: Prunable, x: torch.Tensor):
-        module.activation = x
+        module.activation = x.detach()
         x.register_hook(lambda grad: self._store_grad_in_module(module, grad))
 
     @staticmethod
     def _store_grad_in_module(module, grad):
-        module.grad = grad
+        module.grad = grad.detach()
 
     @staticmethod
     def compute_single_layer_ranks(module, *args, **kwargs):

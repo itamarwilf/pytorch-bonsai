@@ -19,7 +19,7 @@ install_requires = ["confuse",
                     "pytorch-ignite",
                     "pyyaml",
                     "seaborn",
-                    "tensorboard",
+                    "tb-nightly",
                     "torch>=1.1.0",
                     "tqdm"]
 
