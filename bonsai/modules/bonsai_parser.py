@@ -281,12 +281,11 @@ def bonsai_parser(model, model_in):
     linear_list = layer_parser(model, 'Linear')
     slot_names, commands = parse_declaration(code_string, declaration_end)
     bm = BonsaiMemory(slot_names)
-
     for slot in slot_names:
         exec(slot + ' = torch.zeros((1,1))')
 
     for c in commands:
-        #     print('c', c)
+        # print('ccc', c)
 
         res, func, args = split_command(c)
         # print('tag', res, func, args )
@@ -314,7 +313,8 @@ def parse_command(bonsai_parsed_model, conv_list, linear_list, res, func, prevs,
         if not (len(prev_layer_nums) == 1 and prev_layer_nums[0] == len(
                 bonsai_parsed_model.modules) - 1):  # TODO: add a case we route one layer but still routing
             bonsai_parsed_model.append_module('route')
-            bonsai_parsed_model.add_param('layers', str(prev_layer_nums)[1:-1])
+            relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
+            bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
 
     if func == 'batch_norm':
         bonsai_parsed_model.append_module('batchnorm2d')
@@ -322,7 +322,7 @@ def parse_command(bonsai_parsed_model, conv_list, linear_list, res, func, prevs,
     elif func == 'max_pool2d':
         bonsai_parsed_model.append_module('maxpool')
         bonsai_parsed_model.add_2d_param('kernel_size', args[1])
-        bonsai_parsed_model.add_2d_param('stride', args[2])
+        bonsai_parsed_model.add_2d_param('stride', args[3])
 
     elif func in ['adaptive_avg_pool2d','avg_pool2d']:
         bonsai_parsed_model.append_module('avgpool2d')
@@ -339,26 +339,30 @@ def parse_command(bonsai_parsed_model, conv_list, linear_list, res, func, prevs,
         bonsai_parsed_model.append_module('flatten')
 
     elif func == '_convolution':
-        if str(args[6]).strip() == 'True':
+        if str(args[9]).strip() == 'True':
             bonsai_parsed_model.append_module('prunable_deconv2d')
         else:
             bonsai_parsed_model.append_module('prunable_conv2d')
 
-        bonsai_parsed_model.add_param('bias', False)  # TODO: change this to verify if bias is actually false
         bonsai_parsed_model.add_param('out_channels', conv_list[0].out_channels)
 
         bonsai_parsed_model.add_2d_param('kernel_size', conv_list[0].kernel_size)
-        bonsai_parsed_model.add_2d_param('stride', args[3])
-        bonsai_parsed_model.add_2d_param('padding', args[4])
+        bonsai_parsed_model.add_2d_param('stride', conv_list[0].stride)
+        bonsai_parsed_model.add_2d_param('padding', conv_list[0].padding)
+        bonsai_parsed_model.add_param('bias', conv_list[0].bias is not None)
 
         conv_list = conv_list[1:]
     elif func == 'cat':
         bonsai_parsed_model.append_module('route')
-        bonsai_parsed_model.add_param('layers', str(bonsai_parsed_model.get_layers_by_result_dict(prevs))[1:-1])
+        prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
+        relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
+        bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
 
     elif func == 'add_':
         bonsai_parsed_model.append_module('residual_add')
-        bonsai_parsed_model.add_param('layers', str(bonsai_parsed_model.get_layers_by_result_dict(prevs))[1:-1])
+        prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
+        relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
+        bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
 
     elif func == 'pixel_shuffle':
         bonsai_parsed_model.append_module('pixel_shuffle')
@@ -366,6 +370,7 @@ def parse_command(bonsai_parsed_model, conv_list, linear_list, res, func, prevs,
 
     elif func == 'addmm':
         bonsai_parsed_model.append_module('linear')
+        bonsai_parsed_model.add_param('in_features', linear_list[0].in_features)
         bonsai_parsed_model.add_param('out_features', linear_list[0].out_features)
         linear_list = linear_list[1:]
     else:
