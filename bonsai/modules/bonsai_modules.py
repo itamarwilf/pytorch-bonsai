@@ -210,7 +210,7 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
         if "num_batches_tracked" in module_name:
             return module_tensor
         elif ".deconv2d.weight" in module_name:
-            return module_name[:, pruning_targets]
+            return module_tensor[:, pruning_targets]
         else:
             return module_tensor[pruning_targets]
 
