@@ -47,7 +47,7 @@ def _convert_module_cfg_value(val: str):
         except ValueError:
             pass
     if len(val) == 1:
-        return val[0]
+        val = val[0]
     try:
         if val == "False":
             return False

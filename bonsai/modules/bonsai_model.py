@@ -79,6 +79,7 @@ class BonsaiModel(torch.nn.Module):
                 x = module(model_input[module.module_cfg["input"]])
             else:
                 x = module(x)
+            # sprint(module.module_cfg['name'], x)
             self.output_manager[module.module_cfg["name"]] = x
             if module.module_cfg.get("output"):
                 output.append(x)
