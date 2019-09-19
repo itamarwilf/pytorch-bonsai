@@ -378,9 +378,9 @@ def parse_command(bonsai_parsed_model, conv_list, linear_list, res, func, prevs,
 
     return conv_list, linear_list
 
-
-if __name__ == '__main__':
-    model = models.resnet18()
-    model_in = torch.zeros((1, 3, 224, 224))
-    bpm = bonsai_parser(model, model_in)
-    print(bpm.summary())
+#
+# if __name__ == '__main__':
+#     model = models.resnet18()
+#     model_in = torch.zeros((1, 3, 224, 224))
+#     bpm = bonsai_parser(model, model_in)
+#     print(bpm.summary())
