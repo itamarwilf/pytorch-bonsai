@@ -52,7 +52,7 @@ class TestResNet18:
         res = restored_model(model_input)[0]
         og = model(model_input)
 
-        print('bonsai restored model', restored_model)
+        # print('bonsai restored model', restored_model)
 
         assert torch.all(torch.eq(og, res))
 
@@ -101,7 +101,7 @@ class TestResNet50:
         res = restored_model(model_input)[0]
         og = model(model_input)
 
-        print('bonsai restored model', restored_model)
+        # print('bonsai restored model', restored_model)
 
         assert torch.all(torch.eq(og, res))
 
@@ -149,7 +149,7 @@ class TestVGG19:
         res = restored_model(model_input)[0]
         og = model(model_input)
 
-        print('bonsai restored model', restored_model)
+        # print('bonsai restored model', restored_model)
 
         assert torch.all(torch.eq(og, res))
 
@@ -199,6 +199,6 @@ class TestUNet:
         res = restored_model(model_input)[0]
         og = model(model_input)
 
-        print('bonsai restored model', restored_model)
+        # print('bonsai restored model', restored_model)
 
         assert torch.all(torch.eq(og, res))
