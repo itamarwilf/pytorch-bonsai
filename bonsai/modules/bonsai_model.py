@@ -9,8 +9,6 @@ from bonsai.modules.receptive_field_calculation import calc_receptive_field
 from bonsai.modules.factories.bonsai_module_factory import BonsaiFactory
 from bonsai.modules.model_cfg_parser import basic_model_cfg_parsing
 
-def sprint(tag, tensor):
-    print(tag+': ', 'size: ', tensor.size(),'min: ', float(torch.min(tensor)), 'max: ', float(torch.max(tensor)), 'avg: ', float(torch.mean(tensor)))
 
 class BonsaiModel(torch.nn.Module):
     """
@@ -81,7 +79,7 @@ class BonsaiModel(torch.nn.Module):
                 x = module(model_input[module.module_cfg["input"]])
             else:
                 x = module(x)
-            sprint(module.module_cfg['name'], x)
+            # sprint(module.module_cfg['name'], x)
             self.output_manager[module.module_cfg["name"]] = x
             if module.module_cfg.get("output"):
                 output.append(x)

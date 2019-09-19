@@ -12,8 +12,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def sprint(tag, tensor):
-    print(tag+': ', 'size: ', tensor.size(),'min: ', float(torch.min(tensor)), 'max: ', float(torch.max(tensor)), 'avg: ', float(torch.mean(tensor)))
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -91,21 +89,13 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
-        sprint('l0', out)
         out = self.layer1(out)
-        sprint('l1', out)
         out = self.layer2(out)
-        sprint('l2', out)
         out = self.layer3(out)
-        sprint('l3', out)
         out = self.layer4(out)
-        sprint('l4', out)
         out = F.avg_pool2d(out, 4)
-        sprint('avg', out)
         out = out.view(out.size(0), -1)
-        sprint('flatten', out)
         out = self.linear(out)
-        sprint('linear', out)
         return out
 
 
@@ -133,5 +123,6 @@ def test():
     net = ResNet18()
     y = net(torch.randn(1, 3, 32, 32))
     print(y.size())
+
 
 test()
