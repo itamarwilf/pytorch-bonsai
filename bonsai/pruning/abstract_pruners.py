@@ -51,7 +51,7 @@ class AbstractPruner:
         sets up the pruner for rank calculation by getting layers weights in desired shape (output x input x ...)
         """
         for _, module in self._prunable_modules_iterator():
-            module.weights = module.get_weights()
+            module.weights = module.get_weights().cpu()
 
     def reset(self):
         """
