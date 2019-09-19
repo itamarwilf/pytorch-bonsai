@@ -7,6 +7,7 @@ from tests.resnet import ResNet18, ResNet50
 from tests.vgg import VGG
 from tests.u_net import UNet
 
+cfg_dir = 'tests/cfg_reservoir'
 
 class TestResNet18:
     def test_parse_resnet18(self):
@@ -18,7 +19,6 @@ class TestResNet18:
         model_input = torch.rand(1, 3, 32, 32)
         model = ResNet18()
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_resnet18.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
@@ -28,7 +28,6 @@ class TestResNet18:
         model = ResNet18()
 
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_resnet18.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
@@ -67,7 +66,6 @@ class TestResNet50:
         model_input = torch.rand(1, 3, 32, 32)
         model = ResNet50()
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_resnet50.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
@@ -77,7 +75,6 @@ class TestResNet50:
         model = ResNet50()
 
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_resnet50.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
@@ -115,7 +112,6 @@ class TestVGG19:
         model_input = torch.rand(1, 3, 32, 32)
         model = VGG('VGG19')
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_vgg19.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
@@ -125,7 +121,6 @@ class TestVGG19:
         model = VGG('VGG19')
 
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_vgg19.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
@@ -165,7 +160,6 @@ class TestUNet:
         model_input = torch.rand(1, 4, 128, 128)
         model = UNet(4,4)
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_unet.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
@@ -175,7 +169,6 @@ class TestUNet:
         model = UNet(4,4)
 
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_dir = './../cfg_reservoir'
         cfg_path = cfg_dir + '/parsed_unet.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
