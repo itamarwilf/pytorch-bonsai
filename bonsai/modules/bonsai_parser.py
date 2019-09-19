@@ -90,7 +90,7 @@ def split_command(c):
 
 
 def init_layer():
-    return ('input', 'net', None)
+    return 'input', 'net', None
 
 
 class BonsaiMemory:
