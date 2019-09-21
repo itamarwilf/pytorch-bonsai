@@ -2,43 +2,75 @@ import torch
 from torchvision import models
 
 
-def layer_parser(model, name):
-    l = []
-    inner_layer_parser(model, l, name)
-    return l
+def rchop(string, suffix):
+    """
+    String manipulation. Remove a suffix if it is present.
+    Args:
+        string: string to be chopped
+        suffix: suffix to be removed
+
+    Returns: shortened string
+
+    """
+    if string.endswith(suffix):
+        return string[:-len(suffix)]
+    return string
 
 
-def inner_layer_parser(model, l, name):
+def lchop(string, prefix):
+    """
+    String manipulation. Remove a prefix if it is present.
+    Args:
+        string: string to be chopped
+        prefix: prefix to be removed
+
+    Returns: shortened string
+
+    """
+    if string.startswith(prefix):
+        return string[len(prefix):]
+    return string
+
+
+def recursive_layer_parser(model, name, mem=None, start=True):
+    """
+    Recursive parser of layers. Used to determine attributes of nn.Conv2d and nn.Linear layers
+    Args:
+        model: model to iterate over
+        name: layer name to store (e.g. Conv, Linear)
+        mem: memory storing the located layers
+        start: boolean for recursion termination
+
+    Returns:
+        mem: list of nn.Module objects of the desired type, defined by name
+    """
+    if mem is None:
+        mem = []
+    if start:
+        mem = []
     for layer in model.children():
         if len(list(layer.children())) > 0:
-            inner_layer_parser(layer, l, name)
+            recursive_layer_parser(layer, name, mem, start=False)
         elif name in str(layer):
-            l.append(layer)
+            mem.append(layer)
+    if start:
+        return mem
 
 
-def rchop(thestring, ending):
-    if thestring.endswith(ending):
-        return thestring[:-len(ending)]
-    return thestring
+def parse_trace_code(model, model_in):
+    signature, commands = get_code_string(model, model_in)
+    return parse_code_blocks(signature, commands)
 
 
-def lchop(thestring, start):
-    if thestring.startswith(start):
-        return thestring[len(start):]
-    return thestring
+def parse_code_blocks(signature, commands):
+    signature = [x.strip() for x in signature.split('\n') if len(x.strip()) > 0]
+    input_tensor_names = [rchop(slot, ': Tensor,') for slot in signature]
+    input_tensor_names[0] = lchop(input_tensor_names[0], 'def forward(')[:-1]
+    input_tensor_names[-1] = rchop(input_tensor_names[-1], ': Tensor) -> Tensor:')
 
+    command_list = [x.strip() for x in commands.split('\n') if len(x) > 0]
 
-def parse_declaration(code_string, declaration_end):
-    declaration = code_string[:declaration_end]
-    declaration = [x.strip() for x in declaration.split('\n') if len(x.strip()) > 0]
-    slot_names = [rchop(slot, ': Tensor,') for slot in declaration]
-    slot_names[0] = lchop(slot_names[0], 'def forward(')[:-1]
-    slot_names[-1] = rchop(slot_names[-1], ': Tensor) -> Tensor:')
-
-    commands = code_string[declaration_end:]
-    commands = [x.strip() for x in commands.split('\n') if len(x) > 0]
-
-    return slot_names, commands
+    return input_tensor_names, command_list
 
 
 def get_command_set(code_string, declaration_end):
@@ -48,20 +80,11 @@ def get_command_set(code_string, declaration_end):
     return command_set
 
 
-def evalable(x):
-    try:
-        eval(x)
-    except:
-        return False
-    return True
-
-
-def cond(x):
+def is_variable_name(x):
     return (x.isidentifier() and x not in ['False', 'True', 'None']) or '=' in x
 
 
 def split_command(c):
-
     if '=' in c:
         result = c[:c.find('=')].strip()
         func = c[c.find('=') + 1: c.find('(')].strip()
@@ -69,9 +92,9 @@ def split_command(c):
 
         args = [
             x.replace('[', '').replace(']', '').replace(')', '').replace('annotate(', '')
-                .replace('int(', '').replace('torch.t(', '').replace('torch.size(', '')
-                .strip() for x in args[1:-1].split(',')]
-        evalable_args = ','.join(['"' + x + '"' if cond(x) else x for x in args]).replace(',,', ',')
+            .replace('int(', '').replace('torch.t(', '').replace('torch.size(', '')
+            .strip() for x in args[1:-1].split(',')]
+        evalable_args = ','.join(['"' + x + '"' if is_variable_name(x) else x for x in args]).replace(',,', ',')
         return result, func, evalable_args
 
     elif 'return' in c:
@@ -85,21 +108,118 @@ def split_command(c):
         args = [
             x.replace('[', '').replace(']', '').replace(')', '').replace('int(', '').replace('torch.t(', '').replace(
                 'torch.size(', '').strip() for x in args[1:-1].split(',')]
-        evalable_args = ','.join(['"' + x + '"' if cond(x) else x for x in args])
+        evalable_args = ','.join(['"' + x + '"' if is_variable_name(x) else x for x in args])
         return result, func, evalable_args
 
 
 def init_layer():
-    return 'input', 'net', None
+    return 'input', 'net', {}
 
 
-class BonsaiMemory:
-    def __init__(self, tensor_list=[]):
+def get_code_string(model, model_in):
+    model.eval()
+    traced = torch.jit.trace(model, (model_in,), check_trace=False)
+    code_string = traced.code
+    start_identifier = '-> Tensor:\n'
+    declaration_end = code_string.find(start_identifier) + len(start_identifier)
+    # delete all lines between declaration end and first command with 'input'
+
+    lines = code_string[declaration_end + 1:].split('\n')
+    while 'input' not in lines[0]:
+        del lines[0]
+    code_string = code_string[:declaration_end] + '\n' + '\n'.join(lines)
+
+    signature = code_string[:declaration_end]
+    commands = code_string[declaration_end:]
+
+    return signature, commands
+
+
+def parse_command(bonsai_parsed_model, conv_list, linear_list, func, prevs, args):
+    if 'NumToTensor' in func:
+        return conv_list, linear_list
+    func = func.replace('torch.', '')
+    args = eval(args)
+    prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
+
+    #   print('prev_layer_nums', prev_layer_nums)
+
+    if func not in ['cat', 'add_'] and prev_layer_nums[0] is not None:
+        if not (len(prev_layer_nums) == 1 and prev_layer_nums[0] == len(
+                bonsai_parsed_model.modules) - 1):  # TODO: add a case we route one layer but still routing
+            bonsai_parsed_model.append_module('route')
+            relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
+            bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
+
+    if func == 'batch_norm':
+        bonsai_parsed_model.append_module('batchnorm2d')
+
+    elif func == 'max_pool2d':
+        bonsai_parsed_model.append_module('maxpool')
+        bonsai_parsed_model.add_2d_param('kernel_size', args[1])
+        bonsai_parsed_model.add_2d_param('stride', args[3])
+
+    elif func in ['adaptive_avg_pool2d', 'avg_pool2d']:
+        bonsai_parsed_model.append_module('avgpool2d')
+        bonsai_parsed_model.add_2d_param('kernel_size', args[1])
+
+    elif func == 'leaky_relu':
+        bonsai_parsed_model.add_param('activation', 'LeakyReLU')
+        bonsai_parsed_model.add_param('negative_slope', args[1])
+
+    elif func in ['relu_', 'relu']:
+        bonsai_parsed_model.add_param('activation', 'ReLU')
+
+    elif func in ['reshape', 'view']:
+        bonsai_parsed_model.append_module('flatten')
+
+    elif func == '_convolution':
+        if str(args[9]).strip() == 'True':
+            bonsai_parsed_model.append_module('prunable_deconv2d')
+        else:
+            bonsai_parsed_model.append_module('prunable_conv2d')
+
+        bonsai_parsed_model.add_param('out_channels', conv_list[0].out_channels)
+
+        bonsai_parsed_model.add_2d_param('kernel_size', conv_list[0].kernel_size)
+        bonsai_parsed_model.add_2d_param('stride', conv_list[0].stride)
+        bonsai_parsed_model.add_2d_param('padding', conv_list[0].padding)
+        bonsai_parsed_model.add_param('bias', conv_list[0].bias is not None)
+
+        conv_list = conv_list[1:]
+    elif func == 'cat':
+        bonsai_parsed_model.append_module('route')
+        prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
+        relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
+        bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
+
+    elif func == 'add_':
+        bonsai_parsed_model.append_module('residual_add')
+        prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
+        relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
+        bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
+
+    elif func == 'pixel_shuffle':
+        bonsai_parsed_model.append_module('pixel_shuffle')
+        bonsai_parsed_model.add_param('upscale_factor', args[1])
+
+    elif func == 'addmm':
+        bonsai_parsed_model.append_module('linear')
+        bonsai_parsed_model.add_param('in_features', linear_list[0].in_features)
+        bonsai_parsed_model.add_param('out_features', linear_list[0].out_features)
+        linear_list = linear_list[1:]
+    else:
+        raise ValueError('Layer not implemented!' + str(func))
+
+    return conv_list, linear_list
+
+
+class BonsaiTensorMemory:
+    def __init__(self, tensor_list=None):
+        if tensor_list is None:
+            tensor_list = []
         self.tensor_memory = {0: tensor_list}
         self.layer_memory = {0: init_layer()}
-
-    def add_route(self, layers):
-        self.layer_memory.append('route', layers)
 
     def add(self, result, func, args):
         if 'NumToTensor' in func:
@@ -119,7 +239,7 @@ class BonsaiMemory:
         if len(self.layer_memory) not in self.tensor_memory.keys():
             self.tensor_memory[len(self.layer_memory)] = []
         self.tensor_memory[len(self.layer_memory)].append(result)
-        self.layer_memory[len(self.layer_memory)] = (result, func, prevs)
+        self.layer_memory[len(self.layer_memory)] = (str(result), str(func), prevs)
 
         return prevs
 
@@ -157,11 +277,19 @@ class BonsaiParsedModule:
 
 
 class BonsaiParsedModel:
-    def __init__(self):
+    def __init__(self, input_shape):
         """
-        Represents a complete pytorch model after parsing
+        Represents a complete Pytorch model after parsing
+        Args:
+            input_shape: Iterable, shape of model input
         """
         self.modules = []
+
+        self.append_module('net')
+        self.add_param('width', input_shape[-1])
+        self.add_param('height', input_shape[-2])
+        self.add_param('in_channels', input_shape[-3])
+        self.add_param('result', 'input')
 
     # Adding modules to the model
 
@@ -240,51 +368,33 @@ class BonsaiParsedModel:
         """
         Adding 2d parameters conveniently, e.g. kernel size, stride and more.
         Args:
-            layer: the layer to be added to
-            bonsai_parsed_model:
+            name: parameter name
+            var: parameter content
         Returns:
 
         """
 
         if type(var) == tuple and len(var) == 2:
-            #TODO: implement 2d params (just return var instead of var[0] and act accordingly)
-            self.add_param(name, var[0])  # removing braces
+            # TODO: implement 2d params (just return var instead of var[0] and act accordingly)
+            self.add_param(name, var[0])
         elif type(var) == int:
             self.add_param(name, var)
         else:
             raise ValueError(f'{name} {var} should be one or two ints')
 
 
-
 def bonsai_parser(model, model_in):
-    model.eval()
-    traced = torch.jit.trace(model, (model_in,), check_trace=False)
-    code_string = traced.code
-    start_identifier = '-> Tensor:\n'
-    declaration_end = code_string.find(start_identifier) + len(start_identifier)
-    # delete all lines between declaration end and first command with 'input'
+    bonsai_parsed_model = BonsaiParsedModel(model_in.shape)
 
-    lines = code_string[declaration_end+1:].split('\n')
-    while 'input' not in lines[0]:
-        del lines[0]
-    code_string = code_string[:declaration_end] + '\n' + '\n'.join(lines)
+    input_tensor_names, command_list = parse_trace_code(model, model_in)
 
-    input_shape = model_in.shape
-    bonsai_parsed_model = BonsaiParsedModel()
-    bonsai_parsed_model.append_module('net')
-    bonsai_parsed_model.add_param('width', input_shape[-1])
-    bonsai_parsed_model.add_param('height', input_shape[-2])
-    bonsai_parsed_model.add_param('in_channels', input_shape[-3])
-    bonsai_parsed_model.add_param('result', 'input')
+    bm = BonsaiTensorMemory(input_tensor_names)
+    conv_list = recursive_layer_parser(model, 'Conv')
+    linear_list = recursive_layer_parser(model, 'Linear')
 
-    conv_list = layer_parser(model, 'Conv')
-    linear_list = layer_parser(model, 'Linear')
-    slot_names, commands = parse_declaration(code_string, declaration_end)
-    bm = BonsaiMemory(slot_names)
-    for slot in slot_names:
+    for slot in input_tensor_names:
         exec(slot + ' = torch.zeros((1,1))')
-
-    for c in commands:
+    for c in command_list:
         # print('ccc', c)
 
         res, func, args = split_command(c)
@@ -293,92 +403,12 @@ def bonsai_parser(model, model_in):
             break
         exec(res + ' = torch.zeros((1,1))')
         prevs = bm.add(res, func, args)
-        conv_list, linear_list = parse_command(bonsai_parsed_model, conv_list, linear_list, res, func, prevs, args)
+        conv_list, linear_list = parse_command(bonsai_parsed_model, conv_list, linear_list, func, prevs, args)
         bonsai_parsed_model.add_param('result', res)
 
     bonsai_parsed_model.add_param('output', 1)
     return bonsai_parsed_model
 
-
-def parse_command(bonsai_parsed_model, conv_list, linear_list, res, func, prevs, args):
-    if 'NumToTensor' in func:
-        return conv_list, linear_list
-    func = func.replace('torch.', '')
-    args = eval(args)
-    prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
-
-    #   print('prev_layer_nums', prev_layer_nums)
-
-    if func not in ['cat', 'add_'] and prev_layer_nums[0] is not None:
-        if not (len(prev_layer_nums) == 1 and prev_layer_nums[0] == len(
-                bonsai_parsed_model.modules) - 1):  # TODO: add a case we route one layer but still routing
-            bonsai_parsed_model.append_module('route')
-            relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
-            bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
-
-    if func == 'batch_norm':
-        bonsai_parsed_model.append_module('batchnorm2d')
-
-    elif func == 'max_pool2d':
-        bonsai_parsed_model.append_module('maxpool')
-        bonsai_parsed_model.add_2d_param('kernel_size', args[1])
-        bonsai_parsed_model.add_2d_param('stride', args[3])
-
-    elif func in ['adaptive_avg_pool2d','avg_pool2d']:
-        bonsai_parsed_model.append_module('avgpool2d')
-        bonsai_parsed_model.add_2d_param('kernel_size', args[1])
-
-    elif func == 'leaky_relu':
-        bonsai_parsed_model.add_param('activation', 'LeakyReLU')
-        bonsai_parsed_model.add_param('negative_slope', args[1])
-
-    elif func in ['relu_', 'relu']:
-        bonsai_parsed_model.add_param('activation', 'ReLU')
-
-    elif func in ['reshape', 'view']:
-        bonsai_parsed_model.append_module('flatten')
-
-    elif func == '_convolution':
-        if str(args[9]).strip() == 'True':
-            bonsai_parsed_model.append_module('prunable_deconv2d')
-        else:
-            bonsai_parsed_model.append_module('prunable_conv2d')
-
-        bonsai_parsed_model.add_param('out_channels', conv_list[0].out_channels)
-
-        bonsai_parsed_model.add_2d_param('kernel_size', conv_list[0].kernel_size)
-        bonsai_parsed_model.add_2d_param('stride', conv_list[0].stride)
-        bonsai_parsed_model.add_2d_param('padding', conv_list[0].padding)
-        bonsai_parsed_model.add_param('bias', conv_list[0].bias is not None)
-
-        conv_list = conv_list[1:]
-    elif func == 'cat':
-        bonsai_parsed_model.append_module('route')
-        prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
-        relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
-        bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
-
-    elif func == 'add_':
-        bonsai_parsed_model.append_module('residual_add')
-        prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
-        relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
-        bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
-
-    elif func == 'pixel_shuffle':
-        bonsai_parsed_model.append_module('pixel_shuffle')
-        bonsai_parsed_model.add_param('upscale_factor', args[1])
-
-    elif func == 'addmm':
-        bonsai_parsed_model.append_module('linear')
-        bonsai_parsed_model.add_param('in_features', linear_list[0].in_features)
-        bonsai_parsed_model.add_param('out_features', linear_list[0].out_features)
-        linear_list = linear_list[1:]
-    else:
-        raise ValueError('Layer not implemented!'+str(func))
-
-    return conv_list, linear_list
-
-#
 # if __name__ == '__main__':
 #     model = models.resnet18()
 #     model_in = torch.zeros((1, 3, 224, 224))
