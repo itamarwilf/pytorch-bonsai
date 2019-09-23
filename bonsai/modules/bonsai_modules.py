@@ -166,7 +166,7 @@ class AbstractBDeconv2d(BonsaiModule):
 
     @staticmethod
     def prune_input(pruning_targets, module_name, module_tensor):
-        if ".deconv2d.weight." in module_name:
+        if "deconv2d.weight" in module_name:
             return module_tensor[pruning_targets]
         else:
             return module_tensor
@@ -209,7 +209,7 @@ class PBDeconv2d(AbstractBDeconv2d, Prunable):
     def prune_output(pruning_targets, module_name, module_tensor):
         if "num_batches_tracked" in module_name:
             return module_tensor
-        elif ".deconv2d.weight" in module_name:
+        elif "deconv2d.weight" in module_name:
             return module_tensor[:, pruning_targets]
         else:
             return module_tensor[pruning_targets]
@@ -249,7 +249,7 @@ class BRoute(BonsaiModule):
     # TODO - add more documentation
     def propagate_pruning_target(self, initial_pruning_targets=None):
         # get indices of layers to concat
-        layer_indices = [len(self.get_model().pruning_targets) - 1 + i for i in self.module_cfg["layers"]]
+        layer_indices = [len(self.get_model().pruning_targets) + i for i in self.module_cfg["layers"]]
         # reset desired output and index buffer
         result = []
         buffer = 0
@@ -259,14 +259,14 @@ class BRoute(BonsaiModule):
             # get module whose output is concatenated
             # module = self.get_model().module_list[layer_idx]
             # module_out_channels = module.module_cfg["out_channels"]
-            module_out_channels = self.get_model().output_sizes[layer_idx][0]
+            module_out_channels = self.get_model().output_sizes[layer_idx + 1][0]
 
             # if layer_idx in self.keys():
             #     module_pruning_targets = self.get_model().pruning_targets[layer_idx]
             # else:
             #     module_pruning_targets = list(range(module_out_channels))
             # module_pruning_targets = [x + buffer for x in module_pruning_targets]
-            result.extend(self.get_model().pruning_targets[layer_idx])
+            result.extend([x + buffer for x in self.get_model().pruning_targets[layer_idx]])
             buffer += module_out_channels
         return result
 

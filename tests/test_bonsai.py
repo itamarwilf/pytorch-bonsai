@@ -3,7 +3,7 @@ import os
 import pytest
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, sampler
+from torch.utils.data import DataLoader, sampler, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import transforms
@@ -66,6 +66,23 @@ def val_dl(test_transform):
 def test_dl(test_transform):
     cifar10_test = CIFAR10('tests/.datasets/CIfAR10', train=False, download=True, transform=test_transform)
     yield DataLoader(cifar10_test, batch_size=64, sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN)))
+
+
+@pytest.fixture()
+def unet_dataset():
+    class RandomDataset(Dataset):
+
+        def __getitem__(self, index: int):
+            return torch.rand(4, 512, 512), torch.rand(3, 1024, 1024)
+
+        def __len__(self) -> int:
+            return 30
+    yield RandomDataset()
+
+
+@pytest.fixture()
+def unet_dl(unet_dataset):
+    yield DataLoader(unet_dataset, batch_size=1)
 
 
 @pytest.fixture()
@@ -143,3 +160,7 @@ class TestFullPrune:
                                          criterion, logdir, out_path):
         resnet18_new_bn_with_activation_l2_prunner.run_pruning(train_dl=train_dl, val_dl=val_dl, test_dl=test_dl,
                                                                criterion=criterion, prune_percent=0.1, iterations=8)
+
+    def test_run_prunnig_unet(self, unet_with_weight_prunner, unet_dl, logdir, out_path):
+        unet_with_weight_prunner.run_pruning(train_dl=unet_dl, val_dl=unet_dl, test_dl=unet_dl,
+                                             criterion=torch.nn.L1Loss(), prune_percent=0.1, iterations=1)
