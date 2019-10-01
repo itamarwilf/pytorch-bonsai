@@ -160,7 +160,7 @@ class TestUNet:
         model_input = torch.rand(1, 4, 128, 128)
         model = UNet(4,4)
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_path = cfg_dir + '/parsed_unet.cfg'
+        cfg_path = cfg_dir + '/pruning_iteration_0.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
 
@@ -169,7 +169,7 @@ class TestUNet:
         model = UNet(4,4)
 
         bonsai_parsed_model = bonsai_parser(model, model_input)
-        cfg_path = cfg_dir + '/parsed_unet.cfg'
+        cfg_path = cfg_dir + '/pruning_iteration_0.cfg'
         bonsai_parsed_model.save_cfg(cfg_path)
         restored_model = BonsaiModel(cfg_path, None)
         restored_model_dict = restored_model.state_dict()

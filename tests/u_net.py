@@ -45,7 +45,7 @@ class Down(nn.Module):
 class Up(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(Up, self).__init__()
-        self.up = nn.ConvTranspose2d(in_ch, out_ch, 2, stride=2, bias=False)
+        self.up = nn.ConvTranspose2d(in_ch, out_ch, 2, stride=2, bias=True)
         self.conv = DoubleConv(in_ch, out_ch)
 
     def forward(self, x1, x2):

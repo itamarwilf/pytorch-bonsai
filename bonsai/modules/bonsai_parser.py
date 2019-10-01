@@ -1,5 +1,4 @@
 import torch
-from torchvision import models
 
 
 def rchop(string, suffix):
@@ -58,65 +57,35 @@ def recursive_layer_parser(model, name, mem=None, start=True):
 
 
 def parse_trace_code(model, model_in):
+    """
+    Given a model and input format generate command list and its corresponding tensor names required for execution.
+    First we split the code to the signature block and the command block.
+    Then we split each block into its components - tensors and commands.
+    The commands are parsed in order to generate the cfg file.
+    Args:
+        model: nn.Module, model to read
+        model_in: model input, usually torch.Tensor
+
+    Returns:
+        command_list: list of strings representing the commands
+        input_tensor_names: tensors that the commands use (seldom weight names)
+    """
     signature, commands = get_code_string(model, model_in)
-    return parse_code_blocks(signature, commands)
-
-
-def parse_code_blocks(signature, commands):
-    signature = [x.strip() for x in signature.split('\n') if len(x.strip()) > 0]
-    input_tensor_names = [rchop(slot, ': Tensor,') for slot in signature]
-    input_tensor_names[0] = lchop(input_tensor_names[0], 'def forward(')[:-1]
-    input_tensor_names[-1] = rchop(input_tensor_names[-1], ': Tensor) -> Tensor:')
-
-    command_list = [x.strip() for x in commands.split('\n') if len(x) > 0]
-
+    input_tensor_names, command_list = parse_code_blocks(signature, commands)
     return input_tensor_names, command_list
 
 
-def get_command_set(code_string, declaration_end):
-    commands = code_string[declaration_end:]
-    commands = [x.strip() for x in commands.split('\n') if len(x) > 0]
-    command_set = list(set([x[x.find('=') + 2:x.find('(')] for x in commands if '=' in x]))
-    return command_set
-
-
-def is_variable_name(x):
-    return (x.isidentifier() and x not in ['False', 'True', 'None']) or '=' in x
-
-
-def split_command(c):
-    if '=' in c:
-        result = c[:c.find('=')].strip()
-        func = c[c.find('=') + 1: c.find('(')].strip()
-        args = c[c.find('('):].strip()
-
-        args = [
-            x.replace('[', '').replace(']', '').replace(')', '').replace('annotate(', '')
-            .replace('int(', '').replace('torch.t(', '').replace('torch.size(', '')
-            .strip() for x in args[1:-1].split(',')]
-        evalable_args = ','.join(['"' + x + '"' if is_variable_name(x) else x for x in args]).replace(',,', ',')
-        return result, func, evalable_args
-
-    elif 'return' in c:
-        if c.split(' ')[-1].isidentifier():
-            return c.split(' ')[-1], None, None
-
-        result = 'final_output'
-        func = c[c.find('return') + len('return') + 1: c.find('(')].strip()
-        args = c[c.find('('):].strip()
-
-        args = [
-            x.replace('[', '').replace(']', '').replace(')', '').replace('int(', '').replace('torch.t(', '').replace(
-                'torch.size(', '').strip() for x in args[1:-1].split(',')]
-        evalable_args = ','.join(['"' + x + '"' if is_variable_name(x) else x for x in args])
-        return result, func, evalable_args
-
-
-def init_layer():
-    return 'input', 'net', {}
-
-
 def get_code_string(model, model_in):
+    """
+    Trace a model and generate a code string.
+    Args:
+        model: nn.Module, model to read
+        model_in: model input, usually torch.Tensor
+
+    Returns:
+        signature: string of the format 'def forward( x, tensors names...)'
+        commands: code string of commands separated by newlines
+    """
     model.eval()
     traced = torch.jit.trace(model, (model_in,), check_trace=False)
     code_string = traced.code
@@ -135,18 +104,123 @@ def get_code_string(model, model_in):
     return signature, commands
 
 
+def parse_code_blocks(signature, commands):
+    """
+    Split the signature block into tensor names, and the commands block to the different commands
+    Args:
+        signature: signature block code string
+        commands: commands block code string
+
+    Returns:
+        input_tensor_names: list of tensor names that appear as input
+        command_list: list of commands
+
+    """
+    signature = [x.strip() for x in signature.split('\n') if len(x.strip()) > 0]
+    input_tensor_names = [rchop(slot, ': Tensor,') for slot in signature]
+    input_tensor_names[0] = lchop(input_tensor_names[0], 'def forward(')[:-1]
+    input_tensor_names[-1] = rchop(input_tensor_names[-1], ': Tensor) -> Tensor:')
+
+    command_list = [x.strip() for x in commands.split('\n') if len(x) > 0]
+
+    return input_tensor_names, command_list
+
+
+def get_command_set(commands):
+    """
+    Get list of used commands in the model.
+    Use this functions to check if all used functions appear in the supported function list.
+    Args:
+        commands: list of commands string
+
+    Returns:
+        command_set: list of command names' string
+    """
+    commands = [x.strip() for x in commands.split('\n') if len(x) > 0]
+    command_set = list(set([x[x.find('=') + 2:x.find('(')] for x in commands if '=' in x]))
+    return command_set
+
+
+def is_variable_name(x):
+    """
+    Check if a string is a valid variable name
+    Args:
+        x: input string
+
+    Returns:
+        True if x is a valid variable name
+    """
+    return (x.isidentifier() and x not in ['False', 'True', 'None']) or '=' in x
+
+
+def clear_argument_string(input_string):
+    """
+    Remove redundant string parts from a command
+    Args:
+        input_string: command string
+
+    Returns:
+        shortened string
+    """
+    redundant_strings = ['[', ']', ')', 'annotate(', 'int(', 'torch.t(', 'torch.size(']
+    for red_string in redundant_strings:
+        input_string = input_string.replace(red_string, '')
+    input_string = input_string.strip()
+    return input_string
+
+
+def split_command(command):
+    """
+    Split a command into function, arguments and result variable
+    Args:
+        command: string.
+
+    Returns:
+        result, function, argument list
+    """
+    result, func = None, None
+
+    if '=' in command:
+        result = command[:command.find('=')].strip()
+        func = command[command.find('=') + 1: command.find('(')].strip()
+
+    elif 'return' in command:
+        # command is 'return -tensor-'
+        if command.split(' ')[-1].isidentifier():
+            return command.split(' ')[-1], None, None
+
+        # command is 'return func(args)'
+        result = 'final_output'
+        func = command[command.find('return') + len('return') + 1: command.find('(')].strip()
+
+    args = command[command.find('('):].strip()
+    args = [clear_argument_string(x) for x in args[1:-1].split(',')]
+    args = ','.join(['"' + x + '"' if is_variable_name(x) else x for x in args]).replace(',,', ',')
+    return result, func, args
+
+
 def parse_command(bonsai_parsed_model, conv_list, linear_list, func, prevs, args):
+    """
+    Parse the command string and add it to the final model
+    Args:
+        bonsai_parsed_model: parse model representing a cfg file
+        conv_list: list of nn.Conv2d modules and their parameters
+        linear_list: list of nn.Linear modules and their parameters
+        func: function name
+        prevs: previous layers
+        args: function arguments
+
+    Returns:
+        Updated conv_list and linear_list (0 or 1 element may be removed)
+    """
     if 'NumToTensor' in func:
         return conv_list, linear_list
     func = func.replace('torch.', '')
     args = eval(args)
     prev_layer_nums = bonsai_parsed_model.get_layers_by_result_dict(prevs)
 
-    #   print('prev_layer_nums', prev_layer_nums)
-
     if func not in ['cat', 'add_'] and prev_layer_nums[0] is not None:
-        if not (len(prev_layer_nums) == 1 and prev_layer_nums[0] == len(
-                bonsai_parsed_model.modules) - 1):  # TODO: add a case we route one layer but still routing
+        if not (len(prev_layer_nums) == 1 and prev_layer_nums[0] == len(bonsai_parsed_model.modules) - 1):
             bonsai_parsed_model.append_module('route')
             relative_layer_nums = [int(x) - len(bonsai_parsed_model.modules) + 1 for x in prev_layer_nums]
             bonsai_parsed_model.add_param('layers', str(relative_layer_nums)[1:-1])
@@ -214,34 +288,39 @@ def parse_command(bonsai_parsed_model, conv_list, linear_list, func, prevs, args
     return conv_list, linear_list
 
 
-class BonsaiTensorMemory:
-    def __init__(self, tensor_list=None):
-        if tensor_list is None:
-            tensor_list = []
-        self.tensor_memory = {0: tensor_list}
-        self.layer_memory = {0: init_layer()}
+def add_layer(tensor_memory, layer_memory, result, func, args):
+    """
+    Add layer to memory, used for previous layer computation
+    Args:
+        tensor_memory: slot memory
+        layer_memory: module memory
+        result: result slot name
+        func: function name
+        args: function arguments
 
-    def add(self, result, func, args):
-        if 'NumToTensor' in func:
-            return
-        args = [arg.replace('"', '') for arg in args.split(',')]
-        prevs = {}
-        for arg in args:
-            for k in self.tensor_memory.keys():
-                if arg in self.tensor_memory[k]:
-                    if k not in prevs.keys():
-                        prevs[k] = []
-                    prevs[k].append(arg)
+    Returns:
+        dict of previous layer names
+    """
+    if 'NumToTensor' in func:
+        return
+    args = [arg.replace('"', '') for arg in args.split(',')]
+    prevs = {}
+    for arg in args:
+        for k in tensor_memory.keys():
+            if arg in tensor_memory[k]:
+                if k not in prevs.keys():
+                    prevs[k] = []
+                prevs[k].append(arg)
 
-        prevs = {k: [var for var in v if var not in self.tensor_memory[0] or var == 'input'] for k, v in prevs.items()}
-        prevs = {k: v for k, v in prevs.items() if len(v) > 0}
+    prevs = {k: [var for var in v if var not in tensor_memory[0] or var == 'input'] for k, v in prevs.items()}
+    prevs = {k: v for k, v in prevs.items() if len(v) > 0}
 
-        if len(self.layer_memory) not in self.tensor_memory.keys():
-            self.tensor_memory[len(self.layer_memory)] = []
-        self.tensor_memory[len(self.layer_memory)].append(result)
-        self.layer_memory[len(self.layer_memory)] = (str(result), str(func), prevs)
+    if len(layer_memory) not in tensor_memory.keys():
+        tensor_memory[len(layer_memory)] = []
+    tensor_memory[len(layer_memory)].append(result)
+    layer_memory[len(layer_memory)] = (str(result), str(func), prevs)
 
-        return prevs
+    return prevs
 
 
 class BonsaiParsedModule:
@@ -384,28 +463,40 @@ class BonsaiParsedModel:
 
 
 def bonsai_parser(model, model_in):
+    """
+    Bonsai Parser turns a Pytorch nn.Module into a *.cfg file used to create BonsaiModel objects.
+    The .cfg is easy to parse and quite self explainable, allowing the representation of complex model intuitively.
+    Args:
+        model: nn.Module model
+        model_in: model input, usually torch.Tensor
+
+    Returns:
+        Parsed model object, you may call save_cfg to save to a convenient path.
+    """
+    # set up parsed model
     bonsai_parsed_model = BonsaiParsedModel(model_in.shape)
 
+    # trace the model into code string and parse it
     input_tensor_names, command_list = parse_trace_code(model, model_in)
 
-    bm = BonsaiTensorMemory(input_tensor_names)
+    # set up for iterative parsing
+    tensor_memory = {0: input_tensor_names}
+    layer_memory = {0: ('input', 'net', {})}
+
+    # get nn.Conv2d and nn.Linear layers from model for parameter parsing
     conv_list = recursive_layer_parser(model, 'Conv')
     linear_list = recursive_layer_parser(model, 'Linear')
 
-    for slot in input_tensor_names:
-        exec(slot + ' = torch.zeros((1,1))')
+    # parse commands iteratively
     for c in command_list:
-        # print('ccc', c)
-
         res, func, args = split_command(c)
-        # print('tag', res, func, args )
         if func is None:
             break
-        exec(res + ' = torch.zeros((1,1))')
-        prevs = bm.add(res, func, args)
+        prevs = add_layer(tensor_memory, layer_memory, res, func, args)
         conv_list, linear_list = parse_command(bonsai_parsed_model, conv_list, linear_list, func, prevs, args)
         bonsai_parsed_model.add_param('result', res)
 
+    # add final layer to output
     bonsai_parsed_model.add_param('output', 1)
     return bonsai_parsed_model
 
